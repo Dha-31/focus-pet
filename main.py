@@ -455,6 +455,15 @@ def screen_check():
     result = analyze_foreground(info["hwnd"] if info else None)
     print("分析结果:", result)
 
+def open_settings():
+    """直接打开集中配置编辑器（不需要先启动桌宠）。"""
+    import tkinter as tk
+    from ui.settings_editor import SettingsEditor
+    root = tk.Tk()
+    root.withdraw()
+    SettingsEditor(root, pet=None)
+    root.mainloop()
+
 def camera_setup():
     """打开摄像头设置窗口（图形界面）：实时预览 + 选择前置/后置 + 保存。"""
     try:
@@ -496,6 +505,7 @@ def main():
     parser.add_argument("--camera-check", action="store_true", help="摄像头自检（约 5 秒）")
     parser.add_argument("--camera-setup", action="store_true", help="打开摄像头设置窗口（图形界面）")
     parser.add_argument("--screen-check", action="store_true", help="截图画面分析自检")
+    parser.add_argument("--settings", action="store_true", help="打开集中配置编辑器（不用先开桌宠）")
     parser.add_argument("--status", action="store_true", help="查看配置与最近记录")
     parser.add_argument("--log", action="store_true", help="查看分心日志")
     args = parser.parse_args()
@@ -508,6 +518,8 @@ def main():
         camera_setup()
     elif args.screen_check:
         screen_check()
+    elif args.settings:
+        open_settings()
     elif args.status:
         print_status()
     elif args.log:

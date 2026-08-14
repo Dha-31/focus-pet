@@ -16,6 +16,7 @@ DEFAULTS = {
         "force_close_enabled": False,
         "save_warning_seconds": 10,
         "tiers_seconds": [5, 15, 30, 60],
+        "custom_tiers": [5, 15, 30, 60],
     },
     "supervision": {
         "poll_interval_seconds": 1,

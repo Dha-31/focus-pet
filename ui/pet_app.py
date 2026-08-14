@@ -42,13 +42,16 @@ BLUSH = "#ffb3b3"
 class PetApp:
     def __init__(self, config, mode="daily", inventory=None, on_teach=None,
                  on_start_study=None, on_end_study=None, on_toggle_pomodoro=None,
-                 on_mode_change=None, on_exit=None):
+                 on_mode_change=None, on_exit=None, on_open_achievements=None,
+                 on_open_report=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
         self.on_toggle_pomodoro = on_toggle_pomodoro
         self.on_mode_change = on_mode_change
         self.on_exit = on_exit
+        self.on_open_achievements = on_open_achievements
+        self.on_open_report = on_open_report
 
         self.mood = 0
         self.block_mode = False
@@ -69,6 +72,12 @@ class PetApp:
         self.accessory = self.inventory.equipped_accessory
         self.skin_face = self._load_skin_face(config)
         self._space_win = None
+        # "你在看我吗"状态
+        self._looking = False
+        self._look_dx = 0.0
+        self._look_dy = 0.0
+        self._looking_since = None
+        self._last_look_msg = 0.0
 
         self.root = tk.Tk()
         self.root.title("Focus Pet")
@@ -199,15 +208,21 @@ class PetApp:
         menu.add_command(label="结束学习", command=self._menu_end_study)
         menu.add_separator()
 
-        # 多档模式
+        # 多档模式（轻松/日常/考试/自定义）
         mode_menu = tk.Menu(menu, tearoff=0)
         self._mode_var = tk.StringVar(value=self.mode)
-        mode_menu.add_radiobutton(label="日常自习（宽松）", value="daily",
+        mode_menu.add_radiobutton(label="轻松模式", value="relaxed",
+                                  variable=self._mode_var,
+                                  command=lambda: self._menu_mode("relaxed"))
+        mode_menu.add_radiobutton(label="日常自习", value="daily",
                                   variable=self._mode_var,
                                   command=lambda: self._menu_mode("daily"))
-        mode_menu.add_radiobutton(label="考试冲刺（严格）", value="exam",
+        mode_menu.add_radiobutton(label="考试冲刺", value="exam",
                                   variable=self._mode_var,
                                   command=lambda: self._menu_mode("exam"))
+        mode_menu.add_radiobutton(label="自定义", value="custom",
+                                  variable=self._mode_var,
+                                  command=lambda: self._menu_mode("custom"))
         menu.add_cascade(label="多档模式", menu=mode_menu)
 
         # 番茄钟
@@ -218,6 +233,8 @@ class PetApp:
         menu.add_command(label="更换形象…", command=self._open_skin_dialog)
         menu.add_command(label="商店…", command=self._open_shop)
         menu.add_command(label="我的空间…", command=self._open_space)
+        menu.add_command(label="成就…", command=self._menu_achievements)
+        menu.add_command(label="数据报表…", command=self._menu_report)
         menu.add_command(label="这个是学习用的！", command=self._menu_teach)
         menu.add_separator()
         menu.add_command(label="退出", command=self._menu_exit)
@@ -257,6 +274,15 @@ class PetApp:
         if allowed:
             self.closed = True
             self.root.destroy()
+
+    # ---------- 成就 / 报表 ----------
+    def _menu_achievements(self):
+        if self.on_open_achievements:
+            self.on_open_achievements()
+
+    def _menu_report(self):
+        if self.on_open_report:
+            self.on_open_report()
 
     # ---------- 商店 / 个人空间 ----------
     def _open_shop(self):
@@ -451,8 +477,54 @@ class PetApp:
         if self.closed:
             return
         self._t += 0.033
+        self._update_looking()
         self._draw()
         self.root.after(33, self._anim)
+
+    def _mouse_pos(self):
+        try:
+            import ctypes
+            from ctypes import wintypes
+            pt = wintypes.POINT()
+            if ctypes.windll.user32.GetCursorPos(ctypes.byref(pt)):
+                return pt.x, pt.y
+        except Exception:
+            pass
+        return None
+
+    def _update_looking(self):
+        """鼠标靠近宠物 => 宠物盯着你看（瞳孔跟随 + 偶尔搭话）。"""
+        if self.block_mode:
+            self._looking = False
+            return
+        pos = self._mouse_pos()
+        if pos is None:
+            self._looking = False
+            return
+        wx = self.root.winfo_x()
+        wy = self.root.winfo_y()
+        cw = self.canvas.winfo_width() or NORMAL_SIZE[0]
+        ch = self.canvas.winfo_height() or NORMAL_SIZE[1]
+        cx = wx + cw / 2.0
+        cy = wy + ch / 2.0
+        dx = pos[0] - cx
+        dy = pos[1] - cy
+        dist = math.hypot(dx, dy)
+        if dist < 150:
+            self._looking = True
+            self._look_dx = max(-1.0, min(1.0, dx / 60.0))
+            self._look_dy = max(-1.0, min(1.0, dy / 60.0))
+            if self._looking_since is None:
+                self._looking_since = time.time()
+            if (time.time() - self._looking_since > 2.0
+                    and time.time() - self._last_look_msg > 15.0):
+                self._last_look_msg = time.time()
+                self.say("你在看我呀？(◕ᴗ◕)")
+        else:
+            self._looking = False
+            self._look_dx = 0.0
+            self._look_dy = 0.0
+            self._looking_since = None
 
     def _draw(self):
         c = self.canvas
@@ -465,9 +537,11 @@ class PetApp:
         if self.image_skin is not None:
             self._draw_image(c, cx, cy + bob, shake)
         else:
+            lean = self._look_dx * 3 if self._looking else 0.0
             pet_renderer.draw_procedural_pet(
-                c, cx, cy + bob, shake, self.mood, self.level,
-                accessory=self.accessory, t=self._t, show_level=True)
+                c, cx + lean, cy + bob, shake, self.mood, self.level,
+                accessory=self.accessory, t=self._t, show_level=True,
+                look=(self._look_dx, self._look_dy) if self._looking else None)
         self._draw_bubble(c, w, h)
 
     def _draw_image(self, c, cx, cy, shake):

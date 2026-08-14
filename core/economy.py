@@ -60,6 +60,16 @@ class Inventory:
     def can_afford(self, price):
         return self.coins >= price
 
+    def add_coins(self, amount):
+        """直接加币（成就奖励等）。"""
+        self.coins = max(0.0, self.coins + amount)
+        self.save()
+
+    def penalize(self, amount):
+        """扣币（逃跑惩罚等）。"""
+        self.coins = max(0.0, self.coins - amount)
+        self.save()
+
     # ---------- 购买 ----------
     def buy(self, item):
         """购买商品（item 为 shop.py 里的条目）。返回是否成功。"""

@@ -17,7 +17,7 @@ BLUSH = "#ffb3b3"
 
 
 def draw_procedural_pet(c, cx, cy, shake, mood, level, accessory=None,
-                        t=0.0, show_level=True, blink_period=3.0):
+                        t=0.0, show_level=True, blink_period=3.0, look=None):
     """画一只会变表情的程序化小猫。"""
     s = 1.0 + min(0.4, (level - 1) * 0.08)
     angry = mood >= 3
@@ -48,12 +48,22 @@ def draw_procedural_pet(c, cx, cy, shake, mood, level, accessory=None,
         c.create_oval(cx + 22 * s + shake, cy + 6 * s, cx + 34 * s + shake, cy + 16 * s,
                       fill=blush, outline="")
 
-    # 眼睛（眨眼）
+    # 眼睛（眨眼 + 跟随"你在看我吗"）
     blinking = (t % blink_period) < 0.18
     eye_y = cy - 10 * s
     if blinking:
         c.create_line(cx - 16 * s + shake, eye_y, cx - 8 * s + shake, eye_y, fill="#4a3728", width=2)
         c.create_line(cx + 8 * s + shake, eye_y, cx + 16 * s + shake, eye_y, fill="#4a3728", width=2)
+    elif look is not None:
+        # 白色眼球 + 瞳孔朝鼠标方向移动
+        for ex in (-12 * s, 12 * s):
+            c.create_oval(cx + ex - 8 * s + shake, eye_y - 8 * s,
+                          cx + ex + 8 * s + shake, eye_y + 8 * s,
+                          fill="white", outline="#4a3728")
+            px = cx + ex + look[0] * 4 * s + shake
+            py = eye_y + look[1] * 3 * s
+            c.create_oval(px - 3.5 * s, py - 3.5 * s, px + 3.5 * s, py + 3.5 * s,
+                          fill="#4a3728", outline="")
     else:
         c.create_oval(cx - 17 * s + shake, eye_y - 6 * s, cx - 7 * s + shake, eye_y + 6 * s,
                       fill="#4a3728", outline="")

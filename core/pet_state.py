@@ -24,6 +24,8 @@ class PetState:
         self.escapes = 0
         self.total_focus_minutes = 0.0
         self.total_distract_minutes = 0.0
+        self.current_streak = 0.0
+        self.best_streak = 0.0
         self._leveled = False
         self._load()
 
@@ -42,6 +44,8 @@ class PetState:
                 self.escapes = int(data.get("escapes", 0))
                 self.total_focus_minutes = float(data.get("total_focus_minutes", 0.0))
                 self.total_distract_minutes = float(data.get("total_distract_minutes", 0.0))
+                self.current_streak = float(data.get("current_streak", 0.0))
+                self.best_streak = float(data.get("best_streak", 0.0))
             except (json.JSONDecodeError, OSError):
                 pass
         self.level = self._level_from_xp()
@@ -56,6 +60,8 @@ class PetState:
             "escapes": self.escapes,
             "total_focus_minutes": round(self.total_focus_minutes, 1),
             "total_distract_minutes": round(self.total_distract_minutes, 1),
+            "current_streak": round(self.current_streak, 1),
+            "best_streak": round(self.best_streak, 1),
         }
         with open(self._path(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -72,6 +78,9 @@ class PetState:
         self.xp += seconds
         self.affinity = min(100.0, self.affinity + 0.02 * seconds)
         self.total_focus_minutes += seconds / 60.0
+        self.current_streak += seconds
+        if self.current_streak > self.best_streak:
+            self.best_streak = self.current_streak
         new_level = self._level_from_xp()
         if new_level > self.level:
             self.level = new_level
@@ -81,6 +90,7 @@ class PetState:
     def add_distraction(self, seconds):
         self.affinity = max(0.0, self.affinity - 0.04 * seconds)
         self.total_distract_minutes += seconds / 60.0
+        self.current_streak = 0.0  # 连续专注中断
         self.save()
 
     def consume_level_up(self):

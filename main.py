@@ -144,9 +144,21 @@ def run_app():
     inventory = Inventory()
     original_force_close = bool(cfg["blocking"]["force_close_enabled"])
 
+    MODE_TIERS = {
+        "relaxed": [10, 30, 60, 120],
+        "daily": [5, 15, 30, 60],
+        "exam": [3, 8, 15, 30],
+        "custom": list(cfg["blocking"].get("custom_tiers", [5, 15, 30, 60])),
+    }
+    MODE_MSG = {
+        "relaxed": "轻松模式，我会温柔一点~",
+        "daily": "日常自习模式！",
+        "exam": "考试冲刺模式！我会更严格！",
+        "custom": "自定义模式！",
+    }
+
     def apply_mode(mode):
-        cfg["blocking"]["tiers_seconds"] = (
-            [3, 8, 15, 30] if mode == "exam" else [5, 15, 30, 60])
+        cfg["blocking"]["tiers_seconds"] = MODE_TIERS.get(mode, MODE_TIERS["daily"])
         cfg["blocking"]["force_close_enabled"] = (mode == "exam") or original_force_close
         meter.tier_seconds = list(cfg["blocking"]["tiers_seconds"])
 
@@ -200,6 +212,7 @@ def run_app():
             pet.say("还没有开始学习呢")
             return
         logbook.log_event("session_end", summary["goal"])
+        check_achievements()
         pet.say(f"结束！专注 {summary['focus_minutes']} 分钟，"
                 f"分心 {summary['distract_minutes']} 分钟，"
                 f"好感度 {pet_state.affinity:.0f}")
@@ -215,23 +228,69 @@ def run_app():
         pet_state.set_mode(mode)
         apply_mode(mode)
         pet.set_mode(mode)
-        pet.say("考试冲刺模式！我会更严格地盯住你！"
-                if mode == "exam" else "日常自习模式，放松一点~")
+        pet.say(MODE_MSG.get(mode, "已切换模式"))
+
+    # 成就系统
+    from core.achievements import AchievementManager, REWARD_COINS
+    achievements = AchievementManager()
+
+    def check_achievements():
+        newly = achievements.evaluate(pet_state, inventory)
+        if not newly:
+            return
+        names = "、".join(
+            (AchievementManager.get(aid) or {}).get("name", aid) for aid in newly)
+        reward = len(newly) * REWARD_COINS
+        inventory.add_coins(reward)
+        pet.say(f"🎉 解锁成就：{names}（+{reward} 币）")
+        logbook.log_event("achievement", f"解锁 {names}")
+
+    def on_open_achievements():
+        check_achievements()
+        from ui.achievements_window import AchievementsWindow
+        AchievementsWindow(pet.root, achievements)
+
+    def on_open_report():
+        from ui.report_window import ReportWindow
+        ReportWindow(pet.root)
+
+    escape_attempts = [0]
 
     def on_exit():
         if cfg["lock"]["enabled"]:
             code = simpledialog.askstring("退出", "输入退出码才能溜走！",
                                           parent=pet.root, show="*")
             if code != cfg["lock"]["exit_code"]:
+                escape_attempts[0] += 1
                 pet.say("哼，不许逃！")
+                if escape_attempts[0] >= 3:
+                    escape_attempts[0] = 0
+                    pet_state.add_escape()
+                    inventory.penalize(20)
+                    logbook.log_event("escape", "连续输错退出码（惩罚）")
+                    pet.say("连续逃跑要扣金币和好感！")
                 return False
+        if session.active:
+            from tkinter import messagebox
+            again = messagebox.askyesno(
+                "逃跑确认",
+                "还有未结束的学习会话，确定要退出吗？\n将扣除 20 专注币和好感度！",
+                parent=pet.root)
+            if not again:
+                return False
+            pet_state.add_escape()
+            inventory.penalize(20)
+            logbook.log_event("escape", "学习中途退出（惩罚）")
+            pet.say("逃跑成功…下次别这样了")
         return True
 
     pet = PetApp(cfg, mode=pet_state.mode, inventory=inventory,
                  on_teach=on_teach,
                  on_start_study=on_start_study, on_end_study=on_end_study,
                  on_toggle_pomodoro=on_toggle_pomodoro,
-                 on_mode_change=on_toggle_mode, on_exit=on_exit)
+                 on_mode_change=on_toggle_mode, on_exit=on_exit,
+                 on_open_achievements=on_open_achievements,
+                 on_open_report=on_open_report)
     pomodoro.on_state_change = lambda state: (
         pet.say("专注时间到！" if state == "focus" else "休息时间到啦，去喝口水吧~"))
 
@@ -327,6 +386,7 @@ def run_app():
                 pet_state.add_distraction(poll)
             if pet_state.consume_level_up():
                 pet.say(f"🎉 我升到 Lv.{pet_state.level} 啦！")
+                check_achievements()
             pet.set_level(pet_state.level)
 
             if tier == 0:

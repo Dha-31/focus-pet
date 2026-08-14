@@ -464,7 +464,7 @@ class PetApp:
         from ui import window_manager
         dialog = tk.Toplevel(self.root)
         dialog.title("更换形象")
-        dialog.geometry("400x560")
+        dialog.geometry("640x580")
         window_manager.open(dialog)
 
         add_header(dialog, "更换形象", "换一张照片 / 换一个主题包，或直接选下面的形象").pack(padx=14, pady=(10, 0), anchor="w")

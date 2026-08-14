@@ -10,8 +10,8 @@ class AchievementsWindow:
         self.manager = manager
         self.root = tk.Toplevel(parent)
         self.root.title("成就徽章")
-        self.root.geometry("520x560")
-                style_window(self.root)
+        self.root.geometry("640x580")
+        style_window(self.root)
         self._build()
 
     def _build(self):

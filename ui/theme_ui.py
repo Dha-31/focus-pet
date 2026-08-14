@@ -1,4 +1,4 @@
-﻿"""ui/theme_ui.py：轻量 UI 统一风格（v3.5）。
+"""ui/theme_ui.py：轻量 UI 统一风格（v3.5）。
 
 - 统一配色/字体常量
 - style_window()：窗口底色
@@ -19,6 +19,8 @@ MUTED = "#888888"
 BORDER = "#f0e0d8"
 
 FONT = ("Microsoft YaHei UI", 10)
+# 辅助窗口统一初始尺寸（接近正方形，可自由拉大）
+AUX_SIZE = (640, 580)
 FONT_SMALL = ("Microsoft YaHei UI", 9)
 FONT_BOLD = ("Microsoft YaHei UI", 10, "bold")
 FONT_TITLE = ("Microsoft YaHei UI", 13, "bold")

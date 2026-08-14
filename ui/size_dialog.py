@@ -16,7 +16,7 @@ class SizeDialog:
         self.pet = pet
         self.root = tk.Toplevel(pet.root)
         self.root.title("调整桌宠大小")
-        self.root.geometry("760x680")
+        self.root.geometry("1080x1000")
         window_manager.open(self.root)
 
         self._pct = 100          # 当前百分比（相对默认尺寸）
@@ -91,7 +91,7 @@ class SizeDialog:
             self._preview_ref = disp
         else:
             # 程序化小猫，随框等比
-            vs = min((box_w - 12) / 200.0, (box_h - 12) / 200.0)
+            vs = min((box_w - 12) / 170.0, (box_h - 12) / 170.0)
             pet_renderer.draw_procedural_pet(
                 c, cx, cy + 6, 0, self.pet.mood, self.pet.level,
                 accessory=self.pet.accessory, t=0.0, show_level=False,

@@ -41,6 +41,14 @@ def main():
     # 动态导入的工具模块（PyInstaller 可能漏）
     cmd += ["--hidden-import", "tools.make_skin", "--hidden-import", "tools.theme_scaffold",
             "--hidden-import", "tools.validate_theme"]
+    # AI 抠图（rembg）：已安装则打包进客户端（体积大但效果好）
+    try:
+        import importlib.util
+        if importlib.util.find_spec("rembg"):
+            cmd += ["--collect-all", "rembg"]
+            print("[build] 已包含 rembg（AI 抠图，首次使用需联网下载模型）")
+    except Exception:
+        pass
     cmd.append(os.path.join(PROJECT_ROOT, "main.py"))
 
     print("构建命令:", " ".join(cmd[:8]), "...")

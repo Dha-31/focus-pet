@@ -58,7 +58,7 @@ class HelpWindow:
         self.welcome = welcome
         self.root = tk.Toplevel(parent)
         self.root.title("Focus Pet 使用帮助")
-        self.root.geometry("760x680")
+        self.root.geometry("1080x1000")
         self._welcome_var = tk.BooleanVar(value=True)
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)

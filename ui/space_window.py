@@ -6,7 +6,7 @@ from core import shop
 from ui import pet_renderer
 from ui.theme_ui import accent_button, style_window
 
-W, H = 560, 420
+W, H = 1000, 940
 FLOOR_Y = int(H * 0.62)
 
 # 家具摆放槽位（6 个）

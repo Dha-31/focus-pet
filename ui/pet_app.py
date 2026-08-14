@@ -35,7 +35,8 @@ SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
 
 TRANSPARENT_BG = "#010203"
-NORMAL_SIZE = (340, 340)   # 默认桌宠大小（调整大小窗口可改，绘制随窗口等比放大，矢量不糊）
+DESIGN_SIZE = 170          # 猫画稿的设计基准（窗口 170 时猫占满；窗口变大猫等比放大，矢量不糊）
+NORMAL_SIZE = (340, 340)   # 默认桌宠窗口大小（调整大小窗口可改）
 MINI_SIZE = (90, 90)
 BLOCK_SIZE = (460, 320)
 
@@ -464,7 +465,7 @@ class PetApp:
         from ui import window_manager
         dialog = tk.Toplevel(self.root)
         dialog.title("更换形象")
-        dialog.geometry("760x680")
+        dialog.geometry("1080x1000")
         window_manager.open(dialog)
 
         add_header(dialog, "更换形象", "换一张照片 / 换一个主题包，或直接选下面的形象").pack(padx=14, pady=(10, 0), anchor="w")
@@ -807,8 +808,8 @@ class PetApp:
         h = c.winfo_height() or self.normal_size[1]
         cx, cy = w / 2.0, h / 2.0
         state = self.sm.current()
-        view_scale = (self.mini_size[0] / self.normal_size[0] if self.mini
-                      else w / self.normal_size[0])
+        view_scale = (self.mini_size[0] / DESIGN_SIZE if self.mini
+                      else w / DESIGN_SIZE)
         # 专注久了打盹：呼吸变缓、眼睛半闭（对图片皮肤只做呼吸缓动）
         napping = (self._activity == "study" and self._focus_streak >= 600
                    and self.mood == 0 and not self.block_mode and not self.sm.sleeping)

@@ -33,7 +33,7 @@ class SettingsEditor:
         self.pet = pet
         self.root = tk.Toplevel(parent)
         self.root.title("集中配置编辑器")
-        self.root.geometry("760x680")
+        self.root.geometry("1080x1000")
         style_window(self.root)
         self._rows = []  # (entry, getter, setter)
         self._build()

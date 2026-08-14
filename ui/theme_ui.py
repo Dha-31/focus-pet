@@ -20,7 +20,7 @@ BORDER = "#f0e0d8"
 
 FONT = ("Microsoft YaHei UI", 10)
 # 辅助窗口统一初始尺寸（接近正方形，可自由拉大）
-AUX_SIZE = (760, 680)
+AUX_SIZE = (1080, 1000)   # 辅助窗口统一初始尺寸（大而舒适，可自由拉大）
 FONT_SMALL = ("Microsoft YaHei UI", 9)
 FONT_BOLD = ("Microsoft YaHei UI", 10, "bold")
 FONT_TITLE = ("Microsoft YaHei UI", 13, "bold")

@@ -30,8 +30,8 @@
   },
   "pet": {
     "skin": "default",
-    "window_x": 1230,
-    "window_y": 670
+    "window_x": 0,
+    "window_y": 0
   },
   "extension": {
     "enabled": true,

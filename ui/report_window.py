@@ -80,8 +80,7 @@ class ReportWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("专注数据报表")
         self.root.geometry("640x720")
-        self.root.resizable(False, False)
-        style_window(self.root)
+                style_window(self.root)
         self._build()
 
     def _build(self):

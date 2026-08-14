@@ -11,8 +11,7 @@ class AchievementsWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("成就徽章")
         self.root.geometry("520x560")
-        self.root.resizable(False, False)
-        style_window(self.root)
+                style_window(self.root)
         self._build()
 
     def _build(self):

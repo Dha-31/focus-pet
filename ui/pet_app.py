@@ -35,7 +35,7 @@ SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
 
 TRANSPARENT_BG = "#010203"
-NORMAL_SIZE = (170, 170)
+NORMAL_SIZE = (200, 200)   # 默认桌宠大小（可拉动四角自由缩放，绘制随窗口等比放大，矢量不糊）
 MINI_SIZE = (90, 90)
 BLOCK_SIZE = (460, 320)
 
@@ -265,24 +265,89 @@ class PetApp:
             self.show()
 
     # ---------- 拖拽 ----------
+    RESIZE_EDGE = 8
+    _CURSORS = {"nw": "size_nw_se", "ne": "size_ne_sw", "sw": "size_ne_sw",
+                "se": "size_nw_se", "n": "size_ns", "s": "size_ns",
+                "w": "size_we", "e": "size_we"}
+
     def _setup_drag(self):
-        self.canvas.bind("<ButtonPress-1>", self._drag_start)
-        self.canvas.bind("<B1-Motion>", self._drag_move)
-        self.canvas.bind("<ButtonRelease-1>", self._drag_end)
+        # 边缘 = 缩放；中间 = 移动。迷你模式锁定尺寸，不响应缩放。
+        self.canvas.bind("<Motion>", self._resize_hover)
+        self.canvas.bind("<ButtonPress-1>", self._press)
+        self.canvas.bind("<B1-Motion>", self._move)
+        self.canvas.bind("<ButtonRelease-1>", self._release)
 
-    def _drag_start(self, event):
-        self._drag = (event.x_root, event.y_root, self.root.winfo_x(), self.root.winfo_y())
+    def _edge_at(self, x, y):
+        w = self.canvas.winfo_width() or 0
+        h = self.canvas.winfo_height() or 0
+        if w < 20 or h < 20:          # 窗口还没映射/绘制完成时用默认尺寸兜底
+            w, h = self.normal_size
+        e = self.RESIZE_EDGE
+        left, right = x <= e, x >= w - e
+        top, bottom = y <= e, y >= h - e
+        if top and left: return "nw"
+        if top and right: return "ne"
+        if bottom and left: return "sw"
+        if bottom and right: return "se"
+        if top: return "n"
+        if bottom: return "s"
+        if left: return "w"
+        if right: return "e"
+        return None
 
-    def _drag_move(self, event):
-        if not self._drag or self.block_mode:
+    def _resize_hover(self, event):
+        if self.mini or self.block_mode:
+            self.canvas.configure(cursor="")
+            return
+        edge = self._edge_at(event.x, event.y)
+        if edge:
+            self.canvas.configure(cursor=self._CURSORS[edge])
+        else:
+            self.canvas.configure(cursor="fleur")
+
+    def _press(self, event):
+        if self.mini or self.block_mode:
+            return
+        edge = self._edge_at(event.x, event.y)
+        if edge:
+            self._resizing = (edge, event.x_root, event.y_root,
+                              self.root.winfo_x(), self.root.winfo_y(),
+                              self.root.winfo_width(), self.root.winfo_height())
+            self._drag = None
+        else:
+            self._drag = (event.x_root, event.y_root,
+                          self.root.winfo_x(), self.root.winfo_y())
+            self._resizing = None
+
+    def _move(self, event):
+        if self.mini or self.block_mode:
+            return
+        if getattr(self, "_resizing", None):
+            edge, rx, ry, wx, wy, ww, wh = self._resizing
+            dx = event.x_root - rx
+            dy = event.y_root - ry
+            minw, minh = self.mini_size
+            maxw = max(minw, self.root.winfo_screenwidth())
+            maxh = max(minh, self.root.winfo_screenheight())
+            new_w, new_h, nx, ny = ww, wh, wx, wy
+            if "e" in edge: new_w = ww + dx
+            if "s" in edge: new_h = wh + dy
+            if "w" in edge: new_w = ww - dx
+            if "n" in edge: new_h = wh - dy
+            new_w = max(minw, min(new_w, maxw))
+            new_h = max(minh, min(new_h, maxh))
+            if "w" in edge: nx = wx + (ww - new_w)
+            if "n" in edge: ny = wy + (wh - new_h)
+            self.root.geometry(f"{new_w}x{new_h}+{nx}+{ny}")
+            return
+        if not self._drag:
             return
         rx, ry, wx, wy = self._drag
-        dx = event.x_root - rx
-        dy = event.y_root - ry
-        self.root.geometry(f"+{wx + dx}+{wy + dy}")
+        self.root.geometry(f"+{wx + event.x_root - rx}+{wy + event.y_root - ry}")
 
-    def _drag_end(self, event):
+    def _release(self, event):
         self._drag = None
+        self._resizing = None
         self._normal_pos = (self.root.winfo_x(), self.root.winfo_y())
         self._save_position()   # 位置记忆
 
@@ -326,6 +391,7 @@ class PetApp:
         look_menu = tk.Menu(menu, tearoff=0)
         look_menu.add_command(label="更换形象…", command=self._open_skin_dialog)
         look_menu.add_command(label="导入主题包…", command=self._import_theme_zip)
+        look_menu.add_command(label="还原初始形象（小猫）", command=lambda: self._set_skin("default"))
         menu.add_cascade(label="形象", menu=look_menu)
         # 娱乐
         fun_menu = tk.Menu(menu, tearoff=0)
@@ -439,8 +505,7 @@ class PetApp:
         from ui import window_manager
         dialog = tk.Toplevel(self.root)
         dialog.title("更换形象")
-        dialog.geometry("380x540")
-        dialog.resizable(False, False)
+        dialog.geometry("400x560")
         window_manager.open(dialog)
 
         add_header(dialog, "更换形象", "换一张照片 / 换一个主题包，或直接选下面的形象").pack(padx=14, pady=(10, 0), anchor="w")
@@ -783,7 +848,8 @@ class PetApp:
         h = c.winfo_height() or self.normal_size[1]
         cx, cy = w / 2.0, h / 2.0
         state = self.sm.current()
-        view_scale = self.mini_size[0] / self.normal_size[0] if self.mini else 1.0
+        view_scale = (self.mini_size[0] / self.normal_size[0] if self.mini
+                      else w / self.normal_size[0])
         # 专注久了打盹：呼吸变缓、眼睛半闭（对图片皮肤只做呼吸缓动）
         napping = (self._activity == "study" and self._focus_streak >= 600
                    and self.mood == 0 and not self.block_mode and not self.sm.sleeping)

@@ -34,8 +34,7 @@ class SettingsEditor:
         self.root = tk.Toplevel(parent)
         self.root.title("集中配置编辑器")
         self.root.geometry("640x720")
-        self.root.resizable(False, False)
-        style_window(self.root)
+                style_window(self.root)
         self._rows = []  # (entry, getter, setter)
         self._build()
 

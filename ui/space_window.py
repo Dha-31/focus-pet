@@ -23,11 +23,11 @@ class SpaceWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("我的空间")
         self.root.geometry(f"{W}x{H + 46}")
-        self.root.resizable(False, False)
         style_window(self.root)
 
-        self.canvas = tk.Canvas(self.root, width=W, height=H, bg="#fdf6ec", highlightthickness=0)
-        self.canvas.pack()
+        self.canvas = tk.Canvas(self.root, bg="#fdf6ec", highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+        self.canvas.bind("<Configure>", lambda e: self._draw())
         bar = tk.Frame(self.root)
         bar.pack(pady=6)
         tk.Button(bar, text="移除最后一件家具", command=self._remove_last).pack(side="left", padx=6)
@@ -35,16 +35,17 @@ class SpaceWindow:
         self._draw()
 
     # ---------- 房间 ----------
-    def _draw_room(self):
+    def _draw_room(self, cw, ch):
         c = self.canvas
+        fy = int(ch * 0.62)
         # 墙
-        c.create_rectangle(0, 0, W, FLOOR_Y, fill="#fdf1dd", outline="")
+        c.create_rectangle(0, 0, cw, fy, fill="#fdf1dd", outline="")
         # 地板
-        c.create_rectangle(0, FLOOR_Y, W, H, fill="#d9b380", outline="")
-        for i in range(0, W, 46):
-            c.create_line(i, FLOOR_Y, i, H, fill="#c49a66")
+        c.create_rectangle(0, fy, cw, ch, fill="#d9b380", outline="")
+        for i in range(0, cw, 46):
+            c.create_line(i, fy, i, ch, fill="#c49a66")
         # 踢脚线
-        c.create_line(0, FLOOR_Y, W, FLOOR_Y, fill="#b8894f", width=3)
+        c.create_line(0, fy, cw, fy, fill="#b8894f", width=3)
 
     def _draw_furniture(self, kind, x, y):
         c = self.canvas
@@ -79,12 +80,16 @@ class SpaceWindow:
     # ---------- 宠物 ----------
     def _draw_pet(self):
         c = self.canvas
-        px, py = W // 2, FLOOR_Y + 18
+        cw = c.winfo_width() or W
+        ch = c.winfo_height() or H
+        k = min(cw / W, ch / H)          # 随窗口等比缩放
+        px = cw / 2
+        py = int(ch * 0.62) + 18 * (ch / H)
         img = self.pet._image_for("idle")   # v3.5 主题系统：取兜底/待机图
         if img is not None:
             try:
                 iw, ih = img.width(), img.height()
-                target_w = 90
+                target_w = int(90 * k)
                 scale = target_w / iw
                 disp = img
                 if scale < 1.0:
@@ -106,7 +111,7 @@ class SpaceWindow:
                         if self.pet.mood >= 1:
                             pet_renderer.draw_expression_overlay(c, hx, hy, hr, self.pet.mood)
                     else:
-                        hx, hy, hr = px, py - 8, 22
+                        hx, hy, hr = px, py - 8 * (ch / H), 22 * k
                         if self.pet.accessory:
                             pet_renderer.draw_accessory(c, hx, hy, hr, self.pet.accessory)
                 return
@@ -115,24 +120,31 @@ class SpaceWindow:
         # 程序化形象
         pet_renderer.draw_procedural_pet(
             c, px, py, 0, self.pet.mood, self.pet.level,
-            accessory=self.pet.accessory, t=self.pet._t, show_level=True)
+            accessory=self.pet.accessory, t=self.pet._t, show_level=True,
+            view_scale=k)
 
     # ---------- 刷新 ----------
     def _draw(self):
         c = self.canvas
         c.delete("all")
-        self._draw_room()
+        cw = c.winfo_width() or W
+        ch = c.winfo_height() or H
+        sx = cw / W
+        sy = ch / H
+        fy = int(ch * 0.62)
+        self._draw_room(cw, ch)
         # 窗户/地毯这类"贴墙"家具优先
         for i, fid in enumerate(self.inventory.placed_furniture):
             item = shop.get_furniture(fid)
             if item is None:
                 continue
             if i < len(SLOTS):
-                x, y = SLOTS[i]
+                x0, y0 = SLOTS[i]
+                x, y = int(x0 * sx), int(y0 * sy)
                 if item["kind"] == "window":
-                    self._draw_furniture("window", x, FLOOR_Y - 130)
+                    self._draw_furniture("window", x, int(fy - 130 * sy))
                 elif item["kind"] == "rug":
-                    self._draw_furniture("rug", x, FLOOR_Y + 20)
+                    self._draw_furniture("rug", x, int(fy + 20 * sy))
                 else:
                     self._draw_furniture(item["kind"], x, y)
         self._draw_pet()

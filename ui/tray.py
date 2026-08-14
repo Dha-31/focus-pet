@@ -1,4 +1,4 @@
-﻿"""ui/tray.py：系统托盘图标（v3.5，ctypes 实现，零第三方依赖）。
+"""ui/tray.py：系统托盘图标（v3.5，ctypes 实现，零第三方依赖）。
 
 - 生成一枚程序化小猫图标（ICO，纯 Python 画图，不依赖 PIL）
 - 用 Shell_NotifyIconW 放进系统托盘
@@ -43,6 +43,8 @@ MENU_START = 1001
 MENU_END = 1002
 MENU_TOGGLE = 1003
 MENU_QUIT = 1004
+MENU_DND = 1005
+MENU_MINI = 1006
 
 WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_longlong, wintypes.HWND, wintypes.UINT,
                              wintypes.WPARAM, wintypes.LPARAM)
@@ -171,12 +173,14 @@ class TrayIcon:
     """系统托盘图标。创建失败时 is_ok() 为 False，桌宠照常运行。"""
 
     def __init__(self, tooltip="Focus Pet", on_start=None, on_end=None,
-                 on_toggle=None, on_quit=None):
+                 on_toggle=None, on_quit=None, on_dnd=None, on_mini=None):
         self.tooltip = tooltip
         self.on_start = on_start
         self.on_end = on_end
         self.on_toggle = on_toggle
         self.on_quit = on_quit
+        self.on_dnd = on_dnd
+        self.on_mini = on_mini
         self._hwnd = None
         self._nid = None
         self._wndproc = None
@@ -298,6 +302,8 @@ class TrayIcon:
                 (MENU_START, "开始学习…"),
                 (MENU_END, "结束学习"),
                 (MENU_TOGGLE, "显示 / 隐藏桌宠"),
+                (MENU_DND, "免打扰：切换"),
+                (MENU_MINI, "迷你模式：切换"),
                 (0, None),                      # 分隔线
                 (MENU_QUIT, "退出"),
             ]
@@ -318,6 +324,10 @@ class TrayIcon:
                 self.on_end()
             elif cmd == MENU_TOGGLE and self.on_toggle:
                 self.on_toggle()
+            elif cmd == MENU_DND and self.on_dnd:
+                self.on_dnd()
+            elif cmd == MENU_MINI and self.on_mini:
+                self.on_mini()
             elif cmd == MENU_QUIT and self.on_quit:
                 self.on_quit()
         except Exception:

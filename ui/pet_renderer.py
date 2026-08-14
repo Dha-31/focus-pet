@@ -17,9 +17,10 @@ BLUSH = "#ffb3b3"
 
 
 def draw_procedural_pet(c, cx, cy, shake, mood, level, accessory=None,
-                        t=0.0, show_level=True, blink_period=3.0, look=None):
+                        t=0.0, show_level=True, blink_period=3.0, look=None,
+                        view_scale=1.0, napping=False):
     """画一只会变表情的程序化小猫。"""
-    s = 1.0 + min(0.4, (level - 1) * 0.08)
+    s = view_scale * (1.0 + min(0.4, (level - 1) * 0.08))
     angry = mood >= 3
     body = BODY_ANGRY if angry else BODY_NORMAL
     outline = OUTLINE_ANGRY if angry else OUTLINE_NORMAL
@@ -49,7 +50,7 @@ def draw_procedural_pet(c, cx, cy, shake, mood, level, accessory=None,
                       fill=blush, outline="")
 
     # 眼睛（眨眼 + 跟随"你在看我吗"）
-    blinking = (t % blink_period) < 0.18
+    blinking = (t % blink_period) < 0.18 or napping
     eye_y = cy - 10 * s
     if blinking:
         c.create_line(cx - 16 * s + shake, eye_y, cx - 8 * s + shake, eye_y, fill="#4a3728", width=2)

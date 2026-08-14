@@ -7,6 +7,7 @@ Lv4 强制关闭 -> 倒计时后发送 WM_CLOSE（默认关闭，需用户在配
 
 只在阻断级别升高时执行一次；回到学习（tier 0）时自动复位。
 """
+from core import sounds
 from sensors.window_monitor import minimize_window, post_close
 
 
@@ -25,6 +26,7 @@ class Blocker:
 
     def _execute(self, tier, hwnd, title):
         if tier >= 1:
+            sounds.play("alert")
             self.pet.say("该学习啦！" + (f"（{title[:12]}）" if title else ""))
         if tier >= 2:
             self.pet.block(True)

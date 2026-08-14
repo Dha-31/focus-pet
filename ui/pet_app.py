@@ -15,12 +15,14 @@ v3.5 升级：
 import json
 import math
 import os
+import random
 import queue
 import shutil
 import time
 import tkinter as tk
 from tkinter import filedialog, simpledialog
 
+from core import sounds
 from core import theme as theme_mod
 from core.economy import Inventory
 from core.state_machine import PetStateMachine
@@ -34,6 +36,7 @@ CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
 
 TRANSPARENT_BG = "#010203"
 NORMAL_SIZE = (170, 170)
+MINI_SIZE = (90, 90)
 BLOCK_SIZE = (460, 320)
 
 
@@ -41,11 +44,14 @@ class PetApp:
     def __init__(self, config, mode="daily", inventory=None, on_teach=None,
                  on_start_study=None, on_end_study=None, on_toggle_pomodoro=None,
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
-                 on_open_report=None, on_open_settings=None, tray_enabled=False):
+                 on_open_report=None, on_open_settings=None, tray_enabled=False,
+                 on_toggle_dnd=None, on_toggle_mini=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
         self.on_toggle_pomodoro = on_toggle_pomodoro
+        self.on_toggle_dnd = on_toggle_dnd
+        self.on_toggle_mini = on_toggle_mini
         self.on_mode_change = on_mode_change
         self.on_exit = on_exit
         self.on_open_achievements = on_open_achievements
@@ -66,6 +72,12 @@ class PetApp:
         self.closed = False
         self.tray_enabled = bool(tray_enabled)
         self.on_skin_changed = None      # 换皮肤后的回调（main.py 用它更新托盘图标）
+        self.dnd = bool(config.get("dnd", {}).get("enabled", False))      # 免打扰
+        self.mini = bool(config.get("pet", {}).get("mini_mode", False))   # 迷你模式
+        self._activity = "idle"          # study / distraction / idle（活动驱动动画）
+        self._focus_streak = 0.0
+        self._idle_action = None         # (kind, start_ts, end_ts) 随机待机动作
+        self._next_idle_action = time.time() + random.uniform(18, 35)
 
         self._queue = queue.Queue()
         self.theme_name = config.get("pet", {}).get("skin", "default")
@@ -101,6 +113,8 @@ class PetApp:
         except Exception:
             pass
         self._set_geometry(NORMAL_SIZE)
+        if self.mini:
+            self._set_geometry(MINI_SIZE)
 
         self.canvas = tk.Canvas(self.root, bg=TRANSPARENT_BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
@@ -289,6 +303,11 @@ class PetApp:
         # 番茄钟
         label = "番茄钟：开启" if not self.pomodoro_enabled else "番茄钟：关闭"
         menu.add_command(label=label, command=self._menu_toggle_pomodoro)
+        # 免打扰 / 迷你模式（v3.6）
+        dnd_label = "免打扰：开启" if not self.dnd else "免打扰：关闭"
+        menu.add_command(label=dnd_label, command=self._menu_toggle_dnd)
+        mini_label = "迷你模式：开启" if not self.mini else "迷你模式：关闭"
+        menu.add_command(label=mini_label, command=self._menu_toggle_mini)
         menu.add_separator()
 
         menu.add_command(label="更换形象…", command=self._open_skin_dialog)
@@ -321,6 +340,14 @@ class PetApp:
     def _menu_toggle_pomodoro(self):
         if self.on_toggle_pomodoro:
             self.on_toggle_pomodoro()
+
+    def _menu_toggle_dnd(self):
+        if self.on_toggle_dnd:
+            self.on_toggle_dnd()
+
+    def _menu_toggle_mini(self):
+        if self.on_toggle_mini:
+            self.on_toggle_mini()
 
     def _menu_mode(self, mode):
         self.mode = mode
@@ -525,6 +552,8 @@ class PetApp:
 
     # ---------- 监督线程 -> 主线程 ----------
     def say(self, text, seconds=4):
+        if self.dnd:
+            return   # 免打扰：不弹气泡、不发声（监督照常）
         self._queue.put(("say", (text, seconds)))
 
     def set_mood(self, mood):
@@ -540,14 +569,29 @@ class PetApp:
     def set_sleeping(self, on):
         self._queue.put(("sleep", (bool(on),)))
 
+    def set_dnd(self, on):
+        # 免打扰开关都是主线程触发（菜单/托盘），即时生效避免确认消息被早退拦截
+        on = bool(on)
+        self.dnd = on
+        sounds.set_muted(on)
+        self._queue.put(("dnd", (on,)))
+
+    def set_mini(self, on):
+        self._queue.put(("mini", (bool(on),)))
+
+    def set_activity(self, cat, focus_streak):
+        self._queue.put(("activity", (cat, float(focus_streak))))
+
     def celebrate(self, text=None, seconds=3.5):
         if text:
             self.say(text, max(4, seconds + 0.5))
+        sounds.play("celebrate")
         self.play_state("celebrate", seconds)
 
     def show_error(self, text=None, seconds=3.0):
         if text:
             self.say(text, max(4, seconds + 1.0))
+        sounds.play("error")
         self.play_state("error", seconds)
 
     def block(self, on):
@@ -570,9 +614,10 @@ class PetApp:
             while True:
                 kind, args = self._queue.get_nowait()
                 if kind == "say":
-                    text, seconds = args
-                    self.bubble_text = text
-                    self._bubble_until = time.time() + seconds
+                    if not self.dnd:   # 免打扰：显示时也拦截（防止排队期间打开免打扰）
+                        text, seconds = args
+                        self.bubble_text = text
+                        self._bubble_until = time.time() + seconds
                 elif kind == "mood":
                     self.mood = args[0]
                 elif kind == "state":
@@ -580,6 +625,14 @@ class PetApp:
                     self.sm.play(state, seconds)
                 elif kind == "sleep":
                     self.sm.set_sleeping(args[0])
+                elif kind == "dnd":
+                    self.dnd = args[0]
+                    sounds.set_muted(self.dnd)
+                    self._build_menu()
+                elif kind == "mini":
+                    self._set_mini_mode(args[0])
+                elif kind == "activity":
+                    self._activity, self._focus_streak = args
                 elif kind == "block":
                     self._set_block_mode(args[0])
                 elif kind == "pomodoro":
@@ -601,9 +654,16 @@ class PetApp:
             return
         self.block_mode = on
         if on:
-            self._center_for_block()
+            if not self.dnd:            # 免打扰：不放大遮挡，监督照常
+                self._center_for_block()
         else:
-            self._set_geometry(NORMAL_SIZE)
+            self._set_geometry(MINI_SIZE if self.mini else NORMAL_SIZE)
+
+    def _set_mini_mode(self, on):
+        if on == self.mini:
+            return
+        self.mini = bool(on)
+        self._set_geometry(MINI_SIZE if on else NORMAL_SIZE)
 
     # ---------- 动画 ----------
     def _anim(self):
@@ -611,8 +671,22 @@ class PetApp:
             return
         self._t += 0.033
         self._update_looking()
+        self._update_idle_action()
         self._draw()
         self.root.after(33, self._anim)
+
+    def _update_idle_action(self):
+        """随机待机动作：每隔 18-40 秒做个小动作（跳一下/左右张望/探头）。"""
+        now = time.time()
+        if self._idle_action and now >= self._idle_action[2]:
+            self._idle_action = None
+        if self._idle_action or self.block_mode or self.sm.sleeping:
+            return
+        if now < self._next_idle_action:
+            return
+        self._next_idle_action = now + random.uniform(18, 40)
+        kind = random.choice(["jump", "sway", "peek"])
+        self._idle_action = (kind, now, now + random.uniform(1.2, 1.8))
 
     def _mouse_pos(self):
         try:
@@ -643,13 +717,13 @@ class PetApp:
         dx = pos[0] - cx
         dy = pos[1] - cy
         dist = math.hypot(dx, dy)
-        if dist < 150:
+        if dist < 500:   # 持续眼睛追踪：光标在屏内大部分区域都跟着看
             self._looking = True
             self._look_dx = max(-1.0, min(1.0, dx / 60.0))
             self._look_dy = max(-1.0, min(1.0, dy / 60.0))
             if self._looking_since is None:
                 self._looking_since = time.time()
-            if (time.time() - self._looking_since > 2.0
+            if (dist < 160 and time.time() - self._looking_since > 2.0
                     and time.time() - self._last_look_msg > 15.0):
                 self._last_look_msg = time.time()
                 self.say("你在看我呀？(◕ᴗ◕)")
@@ -666,10 +740,35 @@ class PetApp:
         h = c.winfo_height() or NORMAL_SIZE[1]
         cx, cy = w / 2.0, h / 2.0
         state = self.sm.current()
-        bob = math.sin(self._t * 2.5) * 4.0
+        view_scale = MINI_SIZE[0] / NORMAL_SIZE[0] if self.mini else 1.0
+        # 专注久了打盹：呼吸变缓、眼睛半闭（对图片皮肤只做呼吸缓动）
+        napping = (self._activity == "study" and self._focus_streak >= 600
+                   and self.mood == 0 and not self.block_mode and not self.sm.sleeping)
+        if napping:
+            bob = math.sin(self._t * 1.1) * 2.0
+        else:
+            bob = math.sin(self._t * 2.5) * 4.0
+        # 分心频繁踱步：左右小幅走动
+        pacing = 0.0
+        if self._activity == "distraction" and self.mood >= 2 and not self.block_mode:
+            pacing = math.sin(self._t * 6.0) * 9.0
         shake = math.sin(self._t * 40.0) * 3.0 if (self.mood >= 3 or self.block_mode) else 0.0
+        # 随机待机动作叠加
+        jump = 0.0
+        sway = 0.0
+        if self._idle_action:
+            kind, st, et = self._idle_action
+            prog = min(1.0, max(0.0, (time.time() - st) / max(0.001, et - st)))
+            if kind == "jump":
+                jump = -abs(math.sin(math.pi * prog)) * 16
+            elif kind == "sway":
+                sway = math.sin(prog * math.pi * 2) * 8
+            elif kind == "peek":
+                jump = -abs(math.sin(math.pi * prog)) * 6
+        cx += sway + pacing
+        cy += jump
         # 脚下阴影
-        pet_renderer.draw_shadow(c, cx, cy + bob, 40.0)
+        pet_renderer.draw_shadow(c, cx, cy + bob, 40.0 * view_scale)
         # 宠物本体（按状态选图；没有图走程序化小猫）
         img = self._image_for(state)
         if img is not None:
@@ -678,16 +777,18 @@ class PetApp:
             lean = self._look_dx * 3 if self._looking else 0.0
             pet_renderer.draw_procedural_pet(
                 c, cx + lean, cy + bob, shake, self.mood, self.level,
-                accessory=self.accessory, t=self._t, show_level=True,
-                look=(self._look_dx, self._look_dy) if self._looking else None)
-        # 状态特效
+                accessory=self.accessory, t=self._t, show_level=not self.mini,
+                look=(self._look_dx, self._look_dy) if self._looking else None,
+                view_scale=view_scale, napping=napping)
+        # 状态特效（随迷你模式一起缩小）
         if state == "celebrate":
-            pet_renderer.draw_celebrate_effects(c, cx, cy + bob, self._t)
+            pet_renderer.draw_celebrate_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
         elif state == "error":
-            pet_renderer.draw_error_effects(c, cx, cy + bob, self._t)
+            pet_renderer.draw_error_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
         elif state == "sleep":
-            pet_renderer.draw_sleep_effects(c, cx, cy + bob, self._t)
-        self._draw_bubble(c, w, h)
+            pet_renderer.draw_sleep_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
+        if not self.mini:
+            self._draw_bubble(c, w, h)
 
     def _draw_image(self, c, cx, cy, shake, state):
         if state not in self._skin_disp:

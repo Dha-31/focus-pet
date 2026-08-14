@@ -1,4 +1,4 @@
-﻿"""Focus Pet 入口。
+"""Focus Pet 入口。
 
 用法：
   python main.py                 # 启动桌宠 + 监督循环（Windows 桌面环境）
@@ -146,6 +146,7 @@ def run_app():
     load_config, EmotionMeter, _, Pomodoro, RuleEngine, StudySession = load_core()
 
     from core import logbook
+    from core import sounds
     from core.config import save_config
     from sensors.window_monitor import get_foreground_info
     from blockers.blocker import Blocker
@@ -233,6 +234,7 @@ def run_app():
     def on_start_study(goal):
         if session.start(goal):
             logbook.log_event("session_start", goal)
+            sounds.play("start")
             pet.say(f"好！今天一起学{goal}！")
         else:
             pet.say("已经在学习啦！")
@@ -254,6 +256,20 @@ def run_app():
         save_config(cfg)
         pet.set_pomodoro_enabled(cfg["pomodoro"]["enabled"])
         pet.say("番茄钟开启！" if cfg["pomodoro"]["enabled"] else "番茄钟关闭，持续监督！")
+
+    def on_toggle_dnd():
+        cfg["dnd"]["enabled"] = not cfg["dnd"]["enabled"]
+        save_config(cfg)
+        pet.set_dnd(cfg["dnd"]["enabled"])
+        sounds.set_muted(cfg["dnd"]["enabled"])
+        if not cfg["dnd"]["enabled"]:
+            pet.say("免打扰关闭，我回来啦！")
+
+    def on_toggle_mini():
+        cfg["pet"]["mini_mode"] = not cfg["pet"]["mini_mode"]
+        save_config(cfg)
+        pet.set_mini(cfg["pet"]["mini_mode"])
+        pet.say("我变小啦~" if cfg["pet"]["mini_mode"] else "变回原样！")
 
     def on_toggle_mode(mode):
         pet_state.set_mode(mode)
@@ -327,7 +343,11 @@ def run_app():
                  on_open_achievements=on_open_achievements,
                  on_open_report=on_open_report,
                  on_open_settings=on_open_settings,
-                 tray_enabled=True)
+                 tray_enabled=True,
+                 on_toggle_dnd=on_toggle_dnd,
+                 on_toggle_mini=on_toggle_mini)
+
+    sounds.set_muted(pet.dnd)   # 免打扰初始状态同步给音效
 
     # 系统托盘（v3.5）：失败也不影响桌宠
     tray = None
@@ -338,7 +358,9 @@ def run_app():
             on_start=lambda: pet._menu_start_study(),
             on_end=lambda: pet._menu_end_study(),
             on_toggle=lambda: pet.toggle_visible(),
-            on_quit=lambda: pet._menu_exit())
+            on_quit=lambda: pet._menu_exit(),
+            on_dnd=on_toggle_dnd,
+            on_mini=on_toggle_mini)
         if tray.is_ok():
             print("[tray] 系统托盘已启用：双击显示/隐藏，右键菜单")
         else:
@@ -366,7 +388,34 @@ def run_app():
     if tray is not None:
         pet.on_skin_changed = _update_tray_icon
         _update_tray_icon()
+
+    # 全局快捷键（v3.6）：Ctrl+Alt+S 学习 / Ctrl+Alt+H 显隐 / Ctrl+Alt+M 迷你
+    hotkeys_mgr = None
+    if cfg.get("hotkeys", {}).get("enabled"):
+        try:
+            from core.hotkeys import HotkeyManager
+            hotkeys_mgr = HotkeyManager()
+            if hotkeys_mgr.is_ok():
+                def _hk_study():
+                    if session.active:
+                        pet.root.after(0, on_end_study)
+                    else:
+                        pet.root.after(0, lambda: pet._menu_start_study())
+                def _hk_toggle():
+                    pet.root.after(0, pet.toggle_visible)
+                def _hk_mini():
+                    pet.root.after(0, on_toggle_mini)
+                hotkeys_mgr.register(0x0001 | 0x0002, 0x53, _hk_study)   # Ctrl+Alt+S
+                hotkeys_mgr.register(0x0001 | 0x0002, 0x48, _hk_toggle)  # Ctrl+Alt+H
+                hotkeys_mgr.register(0x0001 | 0x0002, 0x4D, _hk_mini)    # Ctrl+Alt+M
+                print("[hotkeys] 全局快捷键已启用：Ctrl+Alt+S 学习 / Ctrl+Alt+H 显隐 / Ctrl+Alt+M 迷你")
+            else:
+                hotkeys_mgr = None
+        except Exception as exc:
+            print("[hotkeys] 快捷键不可用:", exc)
+            hotkeys_mgr = None
     pomodoro.on_state_change = lambda state: (
+        sounds.play("break"),
         pet.say("专注时间到！" if state == "focus" else "休息时间到啦，去喝口水吧~"))
 
     blocker = Blocker(pet, cfg)
@@ -460,6 +509,7 @@ def run_app():
             if screen_derived:
                 tier = min(tier, 1)  # 画面分析是启发式，只提醒不暴力关
             pet.set_mood(meter.mood)
+            pet.set_activity(cat, pet_state.current_streak)   # 活动驱动动画（打盹/踱步）
             session.tick(cat == "study", poll)
 
             # 桌宠养成：专注加经验、摸鱼扣好感、升级提示
@@ -519,6 +569,11 @@ def run_app():
         if tray is not None:
             try:
                 tray.destroy()
+            except Exception:
+                pass
+        if hotkeys_mgr is not None:
+            try:
+                hotkeys_mgr.destroy()
             except Exception:
                 pass
         try:

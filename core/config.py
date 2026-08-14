@@ -28,6 +28,16 @@ DEFAULTS = {
     },
     "pet": {
         "skin": "default",
+        "mini_mode": False,          # 迷你模式（v3.6）
+    },
+    "dnd": {
+        "enabled": False,            # 免打扰：宠物闭嘴静音，监督照常（v3.6）
+    },
+    "sound": {
+        "enabled": True,             # 提示音效开关（v3.6）
+    },
+    "hotkeys": {
+        "enabled": True,             # 全局快捷键开关（v3.6）
     },
     "extension": {
         "enabled": False,

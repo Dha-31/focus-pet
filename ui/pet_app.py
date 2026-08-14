@@ -858,21 +858,16 @@ class PetApp:
             self._draw_bubble(c, w, h)
 
     def _draw_image(self, c, cx, cy, shake, state):
-        if state not in self._skin_disp:
+        w = c.winfo_width() or self.normal_size[0]
+        h = c.winfo_height() or self.normal_size[1]
+        key = (state, int(w), int(h))     # 窗口尺寸变化时重新缩放
+        if key not in self._skin_disp:
             base = self._image_for(state)
             if base is None:
                 return
-            iw, ih = base.width(), base.height()
-            w = c.winfo_width() or self.normal_size[0]
-            h = c.winfo_height() or self.normal_size[1]
-            if iw > w or ih > h:
-                factor_x = iw // w + (1 if iw % w else 0)
-                factor_y = ih // h + (1 if ih % h else 0)
-                factor = max(1, max(factor_x, factor_y))
-                self._skin_disp[state] = base.subsample(factor, factor)
-            else:
-                self._skin_disp[state] = base
-        disp = self._skin_disp[state]
+            disp = pet_renderer.fit_photo(base, w * 0.9, h * 0.9)
+            self._skin_disp[key] = disp
+        disp = self._skin_disp[key]
         dw, dh = disp.width(), disp.height()
         c.create_image(cx + shake, cy, image=disp)
 

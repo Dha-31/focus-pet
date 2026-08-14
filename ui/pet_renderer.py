@@ -8,6 +8,36 @@
 """
 import math
 
+def fit_photo(img, tw, th):
+    """把 PhotoImage 缩放到目标区域（保持比例，居中不裁切）。
+
+    Tk 的 PhotoImage 只能整数倍 subsample（缩小）/ zoom（放大），
+    这里用"整数倍 + 微调"近似任意缩放。
+    """
+    if img is None:
+        return None
+    try:
+        iw, ih = img.width(), img.height()
+        if iw <= 0 or ih <= 0:
+            return img
+        scale = min(tw / iw, th / ih)
+        if 0.99 <= scale <= 1.01:
+            return img
+        if scale < 1.0:
+            factor = max(1, int(1.0 / scale))
+            return img.subsample(factor, factor)
+        # 放大：先整数倍 zoom，再 subsample 微调
+        zoom = max(1, int(scale))
+        fine = scale / zoom
+        out = img.zoom(zoom, zoom)
+        if fine < 0.98:
+            factor = max(1, int(1.0 / fine))
+            out = out.subsample(factor, factor)
+        return out
+    except Exception:
+        return img
+
+
 BODY_NORMAL = "#ffe0b3"
 BODY_ANGRY = "#f7b9b9"
 OUTLINE_NORMAL = "#e8a95b"

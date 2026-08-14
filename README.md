@@ -28,6 +28,7 @@
 - ✅ **疑似玩手机**：低头 + 手在脸附近 → 宠物提醒
 - ✅ **人不在**：宠物提醒"你去哪了？"，不计专注
 - ✅ 模型下载工具（`tools/fetch_models.py`）
+- ✅ **摄像头设置窗口**（`python main.py --camera-setup`：实时预览 + 选择前置/后置 + 一键保存）
 
 **尚未实现**：截图画面分析、养成进化（v3）、多档模式（v3）。
 
@@ -48,6 +49,7 @@ python main.py                     # 启动桌宠
 
 其他命令：
 ```powershell
+python main.py --camera-setup  # 打开摄像头设置窗口（图形界面）
 python main.py --status   # 查看配置和最近记录
 python main.py --log      # 查看分心日志时间线
 ```
@@ -87,6 +89,14 @@ python tools/make_skin.py 你的图片.png 我的小猫
 `pet.skin` 改成 `<名字>`，重启。不配置图片就用内建程序化小猫。
 
 ## 启用摄像头监督（v2，可选）
+
+**推荐用图形界面设置**（不用手改配置）：
+```powershell
+python main.py --camera-setup
+```
+窗口里能实时预览画面、切换前置/后置、显示"✅ 检测到人脸（推荐）"，点保存即可。
+
+也可以手动配置：
 
 1. 安装依赖（如果还没装）：
    ```powershell

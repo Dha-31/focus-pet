@@ -15,6 +15,7 @@ import json
 import os
 
 from .config import DATA_DIR
+from .settings import settings
 
 # 出现在窗口标题里就认为是学习内容的关键词（保守、可自行扩充）
 STUDY_KEYWORDS = [
@@ -110,7 +111,8 @@ class RuleEngine:
             return "study"
         if self._is_blacklisted(title, process, url):
             return "distraction"
-        if self._match(STUDY_KEYWORDS, title) or self._match(STUDY_KEYWORDS, process):
+        study_kw = settings.get("keywords.study") or STUDY_KEYWORDS
+        if self._match(study_kw, title) or self._match(study_kw, process):
             return "study"
         if (process or "").lower() in [p.lower() for p in TOOL_PROCESSES]:
             return "tool"

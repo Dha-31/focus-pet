@@ -43,7 +43,7 @@ class PetApp:
     def __init__(self, config, mode="daily", inventory=None, on_teach=None,
                  on_start_study=None, on_end_study=None, on_toggle_pomodoro=None,
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
-                 on_open_report=None):
+                 on_open_report=None, on_open_settings=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
@@ -52,6 +52,7 @@ class PetApp:
         self.on_exit = on_exit
         self.on_open_achievements = on_open_achievements
         self.on_open_report = on_open_report
+        self.on_open_settings = on_open_settings
 
         self.mood = 0
         self.block_mode = False
@@ -235,6 +236,7 @@ class PetApp:
         menu.add_command(label="我的空间…", command=self._open_space)
         menu.add_command(label="成就…", command=self._menu_achievements)
         menu.add_command(label="数据报表…", command=self._menu_report)
+        menu.add_command(label="设置…", command=self._menu_settings)
         menu.add_command(label="这个是学习用的！", command=self._menu_teach)
         menu.add_separator()
         menu.add_command(label="退出", command=self._menu_exit)
@@ -283,6 +285,10 @@ class PetApp:
     def _menu_report(self):
         if self.on_open_report:
             self.on_open_report()
+
+    def _menu_settings(self):
+        if self.on_open_settings:
+            self.on_open_settings()
 
     # ---------- 商店 / 个人空间 ----------
     def _open_shop(self):

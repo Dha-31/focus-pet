@@ -140,15 +140,16 @@ def run_app():
     # 桌宠养成状态 + 多档模式（日常/考试冲刺）+ 专注币经济
     from core.pet_state import PetState
     from core.economy import Inventory
+    from core.settings import settings
     pet_state = PetState()
     inventory = Inventory()
     original_force_close = bool(cfg["blocking"]["force_close_enabled"])
 
-    MODE_TIERS = {
+    MODE_TIERS = settings.get("blocking.tiers") or {
         "relaxed": [10, 30, 60, 120],
         "daily": [5, 15, 30, 60],
         "exam": [3, 8, 15, 30],
-        "custom": list(cfg["blocking"].get("custom_tiers", [5, 15, 30, 60])),
+        "custom": [5, 15, 30, 60],
     }
     MODE_MSG = {
         "relaxed": "轻松模式，我会温柔一点~",
@@ -240,7 +241,7 @@ def run_app():
             return
         names = "、".join(
             (AchievementManager.get(aid) or {}).get("name", aid) for aid in newly)
-        reward = len(newly) * REWARD_COINS
+        reward = len(newly) * settings.get("economy.achievement_reward", REWARD_COINS)
         inventory.add_coins(reward)
         pet.say(f"🎉 解锁成就：{names}（+{reward} 币）")
         logbook.log_event("achievement", f"解锁 {names}")
@@ -254,6 +255,10 @@ def run_app():
         from ui.report_window import ReportWindow
         ReportWindow(pet.root)
 
+    def on_open_settings():
+        from ui.settings_editor import SettingsEditor
+        SettingsEditor(pet.root, pet=pet)
+
     escape_attempts = [0]
 
     def on_exit():
@@ -266,7 +271,7 @@ def run_app():
                 if escape_attempts[0] >= 3:
                     escape_attempts[0] = 0
                     pet_state.add_escape()
-                    inventory.penalize(20)
+                    inventory.penalize(settings.get("economy.escape_penalty", 20))
                     logbook.log_event("escape", "连续输错退出码（惩罚）")
                     pet.say("连续逃跑要扣金币和好感！")
                 return False
@@ -279,7 +284,7 @@ def run_app():
             if not again:
                 return False
             pet_state.add_escape()
-            inventory.penalize(20)
+            inventory.penalize(settings.get("economy.escape_penalty", 20))
             logbook.log_event("escape", "学习中途退出（惩罚）")
             pet.say("逃跑成功…下次别这样了")
         return True
@@ -290,7 +295,8 @@ def run_app():
                  on_toggle_pomodoro=on_toggle_pomodoro,
                  on_mode_change=on_toggle_mode, on_exit=on_exit,
                  on_open_achievements=on_open_achievements,
-                 on_open_report=on_open_report)
+                 on_open_report=on_open_report,
+                 on_open_settings=on_open_settings)
     pomodoro.on_state_change = lambda state: (
         pet.say("专注时间到！" if state == "focus" else "休息时间到啦，去喝口水吧~"))
 
@@ -370,6 +376,13 @@ def run_app():
                 pet.set_mood(0)
                 last_cat = cat
                 continue
+
+            # 集中配置热更新：阻断阈值实时生效
+            _tiers = settings.get("blocking.tiers")
+            if isinstance(_tiers, dict):
+                _cur = _tiers.get(pet_state.mode)
+                if _cur and list(_cur) != meter.tier_seconds:
+                    meter.tier_seconds = list(_cur)
 
             is_distraction = cat == "distraction"
             tier = meter.update(is_distraction, poll)

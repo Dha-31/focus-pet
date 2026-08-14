@@ -7,6 +7,7 @@ import json
 import os
 
 from .config import DATA_DIR
+from .settings import settings
 
 COIN_PER_MINUTE = 1.0
 
@@ -51,8 +52,9 @@ class Inventory:
 
     # ---------- 经济 ----------
     def earn(self, seconds):
-        """专注加币。返回本次赚到的币数。"""
-        earned = seconds / 60.0 * COIN_PER_MINUTE
+        """专注加币（汇率从集中配置读取，可热更新）。返回本次赚到的币数。"""
+        rate = settings.get("economy.coin_per_minute", COIN_PER_MINUTE)
+        earned = seconds / 60.0 * rate
         self.coins += earned
         self.save()
         return earned
@@ -71,11 +73,13 @@ class Inventory:
         self.save()
 
     # ---------- 购买 ----------
-    def buy(self, item):
-        """购买商品（item 为 shop.py 里的条目）。返回是否成功。"""
-        if self.coins < item["price"]:
+    def buy(self, item, price=None):
+        """购买商品（价格优先读集中配置）。返回是否成功。"""
+        if price is None:
+            price = settings.get(f"shop.prices.{item['id']}") or item["price"]
+        if self.coins < price:
             return False
-        self.coins -= item["price"]
+        self.coins -= price
         if item["id"] in ACCESSORY_IDS and item["id"] not in self.owned_accessories:
             self.owned_accessories.append(item["id"])
         elif item["id"] not in self.owned_furniture:

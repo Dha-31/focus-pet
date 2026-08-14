@@ -52,7 +52,7 @@ class ShopWindow:
         for item in items:
             row = tk.Frame(inner, padx=8, pady=5)
             row.pack(fill="x")
-            tk.Label(row, text=f"{item['name']}　💰{item['price']}",
+            tk.Label(row, text=f"{item['name']}　💰{shop.price_of(item)}",
                      font=("Microsoft YaHei UI", 10), width=16, anchor="w").pack(side="left")
             btn = tk.Button(row, width=8)
             if kind == "accessory":

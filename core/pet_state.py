@@ -10,6 +10,7 @@ import json
 import os
 
 from .config import DATA_DIR
+from .settings import settings
 
 # 升到 Lv.N 需要的累计专注秒数（Lv1=0 起步）
 LEVEL_XP_SECONDS = [0, 1800, 5400, 10800, 18000, 28800, 43200, 64800]
@@ -68,8 +69,9 @@ class PetState:
 
     # ---------- 等级 ----------
     def _level_from_xp(self):
+        levels = settings.get("pet.xp_levels_seconds") or LEVEL_XP_SECONDS
         level = 1
-        for i, threshold in enumerate(LEVEL_XP_SECONDS):
+        for i, threshold in enumerate(levels):
             if self.xp >= threshold:
                 level = i + 1
         return level

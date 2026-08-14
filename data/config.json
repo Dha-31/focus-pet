@@ -38,7 +38,7 @@
   "camera": {
     "enabled": true,
     "device_index": 1,
-    "interval_seconds": 1
+    "interval_seconds": 1.0
   },
   "screen_analysis": {
     "enabled": true,

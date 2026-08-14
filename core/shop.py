@@ -37,3 +37,9 @@ def get_furniture(item_id):
         if item["id"] == item_id:
             return item
     return None
+
+
+def price_of(item):
+    """商品价格（优先读集中配置，支持热更新）。"""
+    from .settings import settings
+    return settings.get(f"shop.prices.{item['id']}") or item["price"]

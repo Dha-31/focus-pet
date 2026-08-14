@@ -12,3 +12,4 @@ dataset/
 data/pet_state.json
 data/inventory.json
 data/achievements.json
+data/settings.json

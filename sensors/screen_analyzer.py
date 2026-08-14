@@ -18,6 +18,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 CLASSIFIER_PATH = os.path.join(MODELS_DIR, "screen_classifier.pkl")
 
+from core.settings import settings  # noqa: E402
+
 STUDY_KEYWORDS = [
     "目录", "摘要", "参考文献", "关键词", "讲义", "课件", "笔记", "作业", "试卷",
     "课本", "教程", "练习题", "第一章", "第二章", "第1章", "第2章", "引言", "绪论",
@@ -105,9 +107,15 @@ def ocr_analyze(img):
             pass
 
         low = joined.lower()
-        result["study_hits"] = sum(1 for k in STUDY_KEYWORDS if k.lower() in low)
-        result["distraction_hits"] = sum(1 for k in DISTRACTION_KEYWORDS if k.lower() in low)
-        result["has_code"] = bool(CODE_PATTERN.search(joined))
+        study_kw = settings.get("keywords.study") or STUDY_KEYWORDS
+        dist_kw = settings.get("keywords.distraction") or DISTRACTION_KEYWORDS
+        result["study_hits"] = sum(1 for k in study_kw if k.lower() in low)
+        result["distraction_hits"] = sum(1 for k in dist_kw if k.lower() in low)
+        code_pat = settings.get("keywords.code_pattern")
+        if code_pat:
+            result["has_code"] = bool(re.compile(code_pat, re.IGNORECASE).search(joined))
+        else:
+            result["has_code"] = bool(CODE_PATTERN.search(joined))
     except Exception:
         pass
     return result

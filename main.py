@@ -86,6 +86,9 @@ def print_status():
     from core.pet_state import PetState
     _ps = PetState()
     print(f"  桌宠: Lv.{_ps.level} | 模式: {'考试冲刺' if _ps.mode == 'exam' else '日常自习'} | 好感度 {_ps.affinity:.0f} | 累计专注 {_ps.total_focus_minutes:.0f} 分钟")
+    from core.economy import Inventory
+    _inv = Inventory()
+    print(f"  专注币: {_inv.coins:.0f} | 已购装饰 {len(_inv.owned_accessories)} 件 / 家具 {len(_inv.owned_furniture)} 件")
     print(f"  浏览器扩展: {'开（端口 %d）' % cfg['extension']['port'] if cfg['extension']['enabled'] else '关'}")
     print(f"  摄像头: {'开（设备 %d，后端见运行日志）' % cfg['camera']['device_index'] if cfg['camera']['enabled'] else '关'}")
     print("== 最近会话 ==")
@@ -134,9 +137,11 @@ def run_app():
     pomodoro = Pomodoro(**cfg["pomodoro"])
     ext_enabled = bool(cfg["extension"]["enabled"])
 
-    # 桌宠养成状态 + 多档模式（日常/考试冲刺）
+    # 桌宠养成状态 + 多档模式（日常/考试冲刺）+ 专注币经济
     from core.pet_state import PetState
+    from core.economy import Inventory
     pet_state = PetState()
+    inventory = Inventory()
     original_force_close = bool(cfg["blocking"]["force_close_enabled"])
 
     def apply_mode(mode):
@@ -222,7 +227,8 @@ def run_app():
                 return False
         return True
 
-    pet = PetApp(cfg, mode=pet_state.mode, on_teach=on_teach,
+    pet = PetApp(cfg, mode=pet_state.mode, inventory=inventory,
+                 on_teach=on_teach,
                  on_start_study=on_start_study, on_end_study=on_end_study,
                  on_toggle_pomodoro=on_toggle_pomodoro,
                  on_mode_change=on_toggle_mode, on_exit=on_exit)
@@ -316,6 +322,7 @@ def run_app():
             # 桌宠养成：专注加经验、摸鱼扣好感、升级提示
             if cat == "study":
                 pet_state.add_focus(poll)
+                inventory.earn(poll)   # 专注赚币
             elif is_distraction:
                 pet_state.add_distraction(poll)
             if pet_state.consume_level_up():

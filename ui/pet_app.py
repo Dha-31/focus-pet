@@ -19,6 +19,10 @@ import time
 import tkinter as tk
 from tkinter import filedialog, simpledialog
 
+from core.economy import Inventory
+from ui import pet_renderer
+from ui.skin_face import detect_face_meta
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
@@ -36,9 +40,9 @@ BLUSH = "#ffb3b3"
 
 
 class PetApp:
-    def __init__(self, config, mode="daily", on_teach=None, on_start_study=None,
-                 on_end_study=None, on_toggle_pomodoro=None, on_mode_change=None,
-                 on_exit=None):
+    def __init__(self, config, mode="daily", inventory=None, on_teach=None,
+                 on_start_study=None, on_end_study=None, on_toggle_pomodoro=None,
+                 on_mode_change=None, on_exit=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
@@ -61,6 +65,10 @@ class PetApp:
         self._queue = queue.Queue()
         self.image_skin = self._load_skin(config)
         self._skin_disp = None  # 缩放后的显示用图片（防止被垃圾回收）
+        self.inventory = inventory if inventory is not None else Inventory()
+        self.accessory = self.inventory.equipped_accessory
+        self.skin_face = self._load_skin_face(config)
+        self._space_win = None
 
         self.root = tk.Tk()
         self.root.title("Focus Pet")
@@ -104,6 +112,20 @@ class PetApp:
             return
         self.image_skin = self._load_skin(cfg)
         self._skin_disp = None
+
+    def _load_skin_face(self, config):
+        """读取皮肤的人脸元数据（导入时自动检测生成）。"""
+        name = config["pet"]["skin"]
+        if name and name != "default":
+            path = os.path.join(SKINS_DIR, name, "pet.json")
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8-sig") as f:
+                        data = json.load(f)
+                    return data.get("face") or data
+                except Exception:
+                    pass
+        return None
 
     def _list_skins(self):
         """返回可用皮肤名列表（含 default）。"""
@@ -194,6 +216,8 @@ class PetApp:
         menu.add_separator()
 
         menu.add_command(label="更换形象…", command=self._open_skin_dialog)
+        menu.add_command(label="商店…", command=self._open_shop)
+        menu.add_command(label="我的空间…", command=self._open_space)
         menu.add_command(label="这个是学习用的！", command=self._menu_teach)
         menu.add_separator()
         menu.add_command(label="退出", command=self._menu_exit)
@@ -233,6 +257,29 @@ class PetApp:
         if allowed:
             self.closed = True
             self.root.destroy()
+
+    # ---------- 商店 / 个人空间 ----------
+    def _open_shop(self):
+        from ui.shop_window import ShopWindow
+        ShopWindow(self.root, self.inventory,
+                   on_equip=lambda aid: self.equip_accessory(aid),
+                   on_place=lambda fid: self.refresh_space())
+
+    def _open_space(self):
+        from ui.space_window import SpaceWindow
+        self._space_win = SpaceWindow(self.root, self.inventory, self)
+
+    def equip_accessory(self, aid):
+        self.accessory = aid
+        self.say("好看！")
+
+    def refresh_space(self):
+        win = getattr(self, "_space_win", None)
+        if win is not None:
+            try:
+                win._draw()
+            except Exception:
+                pass
 
     # ---------- 更换形象对话框 ----------
     def _open_skin_dialog(self):
@@ -330,6 +377,12 @@ class PetApp:
             print("[pet] 新形象已生成（白色去底）")
         else:
             print("[pet] 新形象已导入（原图）")
+        # 识别人脸位置 -> 装饰品/表情自动适配
+        meta = detect_face_meta(out_path)
+        if meta:
+            with open(os.path.join(out_dir, "pet.json"), "w", encoding="utf-8") as f:
+                json.dump({"face": meta}, f, ensure_ascii=False, indent=2)
+            print("[pet] 已识别人脸位置，装饰品/表情会自动适配")
         self._set_skin(os.path.basename(out_dir))
         listbox.delete(0, "end")
         for n in self._list_skins():
@@ -412,7 +465,9 @@ class PetApp:
         if self.image_skin is not None:
             self._draw_image(c, cx, cy + bob, shake)
         else:
-            self._draw_procedural(c, cx, cy + bob, shake)
+            pet_renderer.draw_procedural_pet(
+                c, cx, cy + bob, shake, self.mood, self.level,
+                accessory=self.accessory, t=self._t, show_level=True)
         self._draw_bubble(c, w, h)
 
     def _draw_image(self, c, cx, cy, shake):
@@ -429,7 +484,23 @@ class PetApp:
             self._skin_disp = base.subsample(factor, factor)
         else:
             self._skin_disp = base
-        c.create_image(cx + shake, cy, image=self._skin_disp)
+        disp = self._skin_disp
+        dw, dh = disp.width(), disp.height()
+        c.create_image(cx + shake, cy, image=disp)
+
+        # 装饰品/表情自动适配（依据人脸元数据）
+        if self.accessory or self.mood >= 1:
+            meta = self.skin_face
+            if meta:
+                hx = cx + shake - dw / 2 + meta["cx"] * dw
+                hy = cy - dh / 2 + meta["cy"] * dh
+                hr = max(8, meta["r"] * dw)
+            else:
+                hx, hy, hr = cx + shake, cy - dh * 0.35, max(8, dw * 0.18)
+            if self.accessory:
+                pet_renderer.draw_accessory(c, hx, hy, hr, self.accessory)
+            if self.mood >= 1:
+                pet_renderer.draw_expression_overlay(c, hx, hy, hr, self.mood)
 
     def _draw_procedural(self, c, cx, cy, shake):
         s = 1.0 + min(0.4, (self.level - 1) * 0.08)

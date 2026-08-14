@@ -10,3 +10,4 @@ skins/*/pet.png
 models/*.task
 dataset/
 data/pet_state.json
+data/inventory.json

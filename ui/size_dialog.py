@@ -16,7 +16,7 @@ class SizeDialog:
         self.pet = pet
         self.root = tk.Toplevel(pet.root)
         self.root.title("调整桌宠大小")
-        self.root.geometry("640x580")
+        self.root.geometry("760x680")
         window_manager.open(self.root)
 
         self._pct = 100          # 当前百分比（相对默认尺寸）

@@ -35,7 +35,7 @@ SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
 
 TRANSPARENT_BG = "#010203"
-NORMAL_SIZE = (200, 200)   # 默认桌宠大小（可拉动四角自由缩放，绘制随窗口等比放大，矢量不糊）
+NORMAL_SIZE = (340, 340)   # 默认桌宠大小（调整大小窗口可改，绘制随窗口等比放大，矢量不糊）
 MINI_SIZE = (90, 90)
 BLOCK_SIZE = (460, 320)
 
@@ -464,7 +464,7 @@ class PetApp:
         from ui import window_manager
         dialog = tk.Toplevel(self.root)
         dialog.title("更换形象")
-        dialog.geometry("640x580")
+        dialog.geometry("760x680")
         window_manager.open(dialog)
 
         add_header(dialog, "更换形象", "换一张照片 / 换一个主题包，或直接选下面的形象").pack(padx=14, pady=(10, 0), anchor="w")

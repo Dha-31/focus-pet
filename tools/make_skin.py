@@ -1,11 +1,12 @@
-﻿"""tools/make_skin.py：把一张图片做成桌宠皮肤。
+"""tools/make_skin.py：把一张图片做成桌宠皮肤。
 
 用法：
   python tools/make_skin.py <图片路径> [皮肤名]
 
 可选依赖（不装也能用，只是不能自动去背景）：
-  pip install pillow       # 缩放 + 白色背景去除
-  pip install rembg        # AI 自动抠图（更通用，首次运行会下载模型）
+  pip install pillow       # 缩放 + 四角扩散去背景
+  pip install rembg        # AI 自动抠图（推荐，首次运行下载模型）
+                          # 默认用 BiRefNet 高质量模型（头发/边缘抠得更干净，约 300MB，只下一次）
 
 处理顺序：rembg 抠图 -> PIL 白色去底+缩放 -> 直接复制原图。
 生成到 skins/<皮肤名>/pet.png，并把 data/config.json 的 pet.skin 设为皮肤名。
@@ -38,27 +39,62 @@ def fit(img, max_size=400):
 
 
 def remove_white_bg(img):
+    """从四角扩散去掉浅色背景（比整图判断白色更通用：只清背景，不误伤前景里的白色）。"""
+    from collections import deque
     img = img.convert("RGBA")
-    data = list(img.getdata())
-    out = []
-    for r, g, b, a in data:
-        if r > 240 and g > 240 and b > 240:
-            out.append((r, g, b, 0))
-        else:
-            out.append((r, g, b, a))
-    img.putdata(out)
+    w, h = img.size
+    px = img.load()
+    visited = [[False] * w for _ in range(h)]
+    q = deque()
+    for sx, sy in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
+        q.append((sx, sy))
+        visited[sy][sx] = True
+    while q:
+        x, y = q.popleft()
+        r, g, b, a = px[x, y]
+        if r > 225 and g > 225 and b > 225:   # 浅色（白/米白）背景
+            px[x, y] = (r, g, b, 0)
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx]:
+                    visited[ny][nx] = True
+                    q.append((nx, ny))
     return img
+
+
+_REMBG_SESSION = None
+
+
+def _rembg_session():
+    """懒加载 rembg 会话：优先 BiRefNet 高质量模型，失败回退默认 u2net。"""
+    global _REMBG_SESSION
+    if _REMBG_SESSION is not None:
+        return _REMBG_SESSION
+    try:
+        from rembg import new_session
+        try:
+            _REMBG_SESSION = new_session("birefnet-general")  # 高质量：头发/边缘更干净
+            print("[make_skin] 使用 BiRefNet 高质量抠图模型（首次使用需下载约 300MB，仅一次）")
+        except Exception:
+            _REMBG_SESSION = new_session()                    # 回退默认 u2net
+            print("[make_skin] BiRefNet 不可用，回退默认 u2net 模型")
+    except Exception as exc:
+        print("[make_skin] rembg 模型初始化失败：", exc)
+        _REMBG_SESSION = False
+    return _REMBG_SESSION
 
 
 def build_skin(src, out_path):
     if HAS_REMBG:
         try:
             from rembg import remove as _remove
-            with open(src, "rb") as f:
-                data = _remove(f.read())
-            with open(out_path, "wb") as f:
-                f.write(data)
-            return "rembg"
+            sess = _rembg_session()
+            if sess:
+                with open(src, "rb") as f:
+                    data = _remove(f.read(), session=sess)
+                with open(out_path, "wb") as f:
+                    f.write(data)
+                return "rembg"
         except Exception as exc:
             print("rembg 失败，改用备用方案：", exc)
     if HAS_PIL:

@@ -9,3 +9,4 @@ skins/*/pet.png
 .DS_Store
 models/*.task
 dataset/
+data/pet_state.json

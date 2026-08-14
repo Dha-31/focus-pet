@@ -83,6 +83,9 @@ def print_status():
           f"（警告 {cfg['blocking']['save_warning_seconds']} 秒）")
     print(f"  退出锁: {'开' if cfg['lock']['enabled'] else '关'}")
     print(f"  皮肤: {cfg['pet']['skin']}")
+    from core.pet_state import PetState
+    _ps = PetState()
+    print(f"  桌宠: Lv.{_ps.level} | 模式: {'考试冲刺' if _ps.mode == 'exam' else '日常自习'} | 好感度 {_ps.affinity:.0f} | 累计专注 {_ps.total_focus_minutes:.0f} 分钟")
     print(f"  浏览器扩展: {'开（端口 %d）' % cfg['extension']['port'] if cfg['extension']['enabled'] else '关'}")
     print(f"  摄像头: {'开（设备 %d，后端见运行日志）' % cfg['camera']['device_index'] if cfg['camera']['enabled'] else '关'}")
     print("== 最近会话 ==")
@@ -130,6 +133,19 @@ def run_app():
     meter = EmotionMeter(cfg["blocking"]["tiers_seconds"])
     pomodoro = Pomodoro(**cfg["pomodoro"])
     ext_enabled = bool(cfg["extension"]["enabled"])
+
+    # 桌宠养成状态 + 多档模式（日常/考试冲刺）
+    from core.pet_state import PetState
+    pet_state = PetState()
+    original_force_close = bool(cfg["blocking"]["force_close_enabled"])
+
+    def apply_mode(mode):
+        cfg["blocking"]["tiers_seconds"] = (
+            [3, 8, 15, 30] if mode == "exam" else [5, 15, 30, 60])
+        cfg["blocking"]["force_close_enabled"] = (mode == "exam") or original_force_close
+        meter.tier_seconds = list(cfg["blocking"]["tiers_seconds"])
+
+    apply_mode(pet_state.mode)
 
     # 浏览器扩展桥接服务（可选）
     bridge = None
@@ -180,7 +196,8 @@ def run_app():
             return
         logbook.log_event("session_end", summary["goal"])
         pet.say(f"结束！专注 {summary['focus_minutes']} 分钟，"
-                f"分心 {summary['distract_minutes']} 分钟")
+                f"分心 {summary['distract_minutes']} 分钟，"
+                f"好感度 {pet_state.affinity:.0f}")
 
     def on_toggle_pomodoro():
         cfg["pomodoro"]["enabled"] = not cfg["pomodoro"]["enabled"]
@@ -188,6 +205,13 @@ def run_app():
         save_config(cfg)
         pet.set_pomodoro_enabled(cfg["pomodoro"]["enabled"])
         pet.say("番茄钟开启！" if cfg["pomodoro"]["enabled"] else "番茄钟关闭，持续监督！")
+
+    def on_toggle_mode(mode):
+        pet_state.set_mode(mode)
+        apply_mode(mode)
+        pet.set_mode(mode)
+        pet.say("考试冲刺模式！我会更严格地盯住你！"
+                if mode == "exam" else "日常自习模式，放松一点~")
 
     def on_exit():
         if cfg["lock"]["enabled"]:
@@ -198,9 +222,10 @@ def run_app():
                 return False
         return True
 
-    pet = PetApp(cfg, on_teach=on_teach, on_start_study=on_start_study,
-                 on_end_study=on_end_study, on_toggle_pomodoro=on_toggle_pomodoro,
-                 on_exit=on_exit)
+    pet = PetApp(cfg, mode=pet_state.mode, on_teach=on_teach,
+                 on_start_study=on_start_study, on_end_study=on_end_study,
+                 on_toggle_pomodoro=on_toggle_pomodoro,
+                 on_mode_change=on_toggle_mode, on_exit=on_exit)
     pomodoro.on_state_change = lambda state: (
         pet.say("专注时间到！" if state == "focus" else "休息时间到啦，去喝口水吧~"))
 
@@ -287,6 +312,15 @@ def run_app():
                 tier = min(tier, 1)  # 画面分析是启发式，只提醒不暴力关
             pet.set_mood(meter.mood)
             session.tick(cat == "study", poll)
+
+            # 桌宠养成：专注加经验、摸鱼扣好感、升级提示
+            if cat == "study":
+                pet_state.add_focus(poll)
+            elif is_distraction:
+                pet_state.add_distraction(poll)
+            if pet_state.consume_level_up():
+                pet.say(f"🎉 我升到 Lv.{pet_state.level} 啦！")
+            pet.set_level(pet_state.level)
 
             if tier == 0:
                 if last_cat == "distraction" and cat != "distraction":

@@ -1,23 +1,27 @@
-"""桌宠窗口：透明置顶小窗 + Canvas 程序化形象（v1）。
+"""桌宠窗口：透明置顶小窗 + Canvas 程序化形象（v3 增强）。
 
 功能：
 - 上下浮动、眨眼、按情绪切换表情（开心/好奇/不耐烦/生气/暴怒）
 - 生气时脸红、抖动；说话气泡自动消失
-- 可拖拽移动；右键菜单：开始学习 / 结束学习 / 番茄钟开关 / 教宠物 / 退出
+- 可拖拽移动；右键菜单：开始学习 / 结束学习 / 多档模式 / 更换形象 / 教宠物 / 退出
+- 养成外观：随等级长大，Lv.4 戴皇冠，Lv.6 金色描边，显示 Lv 角标
 - 阻断 Lv2 时放大挡在屏幕中间
-- 皮肤系统：skins/<名字>/pet.png 存在则用图片形象，否则用程序化形象
+- 皮肤系统：skins/<名字>/pet.png 存在则用图片形象；右键"更换形象"可切换/导入新图
 
 线程安全：监督线程通过消息队列 -> 主线程 after() 轮询，不直接操作 Tk 控件。
 """
+import json
 import math
 import os
 import queue
+import shutil
 import time
 import tkinter as tk
-from tkinter import simpledialog
+from tkinter import filedialog, simpledialog
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
+CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
 
 TRANSPARENT_BG = "#010203"
 NORMAL_SIZE = (170, 170)
@@ -27,20 +31,25 @@ BODY_NORMAL = "#ffe0b3"
 BODY_ANGRY = "#f7b9b9"
 OUTLINE_NORMAL = "#e8a95b"
 OUTLINE_ANGRY = "#d9534f"
+OUTLINE_GOLD = "#d4a017"
 BLUSH = "#ffb3b3"
 
 
 class PetApp:
-    def __init__(self, config, on_teach=None, on_start_study=None,
-                 on_end_study=None, on_toggle_pomodoro=None, on_exit=None):
+    def __init__(self, config, mode="daily", on_teach=None, on_start_study=None,
+                 on_end_study=None, on_toggle_pomodoro=None, on_mode_change=None,
+                 on_exit=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
         self.on_toggle_pomodoro = on_toggle_pomodoro
+        self.on_mode_change = on_mode_change
         self.on_exit = on_exit
 
         self.mood = 0
         self.block_mode = False
+        self.level = 1
+        self.mode = mode if mode in ("daily", "exam") else "daily"
         self.pomodoro_enabled = bool(config["pomodoro"]["enabled"])
         self.bubble_text = ""
         self._bubble_until = 0.0
@@ -48,7 +57,6 @@ class PetApp:
         self._blink_period = 3.0
         self.latest_info = None
         self.closed = False
-        self._drag = None
 
         self._queue = queue.Queue()
         self.image_skin = self._load_skin(config)
@@ -86,6 +94,40 @@ class PetApp:
                 except Exception as exc:
                     print("[pet] 皮肤加载失败，回退到程序化形象：", exc)
         return None
+
+    def reload_skin(self):
+        """按当前配置重新加载皮肤（更换形象后调用）。"""
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8-sig") as f:
+                cfg = json.load(f)
+        except Exception:
+            return
+        self.image_skin = self._load_skin(cfg)
+        self._skin_disp = None
+
+    def _list_skins(self):
+        """返回可用皮肤名列表（含 default）。"""
+        names = ["default"]
+        if os.path.isdir(SKINS_DIR):
+            for entry in sorted(os.listdir(SKINS_DIR)):
+                d = os.path.join(SKINS_DIR, entry)
+                if os.path.isdir(d) and os.path.exists(os.path.join(d, "pet.png")):
+                    names.append(entry)
+        return names
+
+    def _set_skin(self, name):
+        if name not in self._list_skins():
+            return
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8-sig") as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+        cfg.setdefault("pet", {})["skin"] = name
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+        self.reload_skin()
+        self.say("形象已更换！")
 
     # ---------- 窗口几何 ----------
     def _set_geometry(self, size):
@@ -134,9 +176,24 @@ class PetApp:
         menu.add_command(label="开始学习…", command=self._menu_start_study)
         menu.add_command(label="结束学习", command=self._menu_end_study)
         menu.add_separator()
+
+        # 多档模式
+        mode_menu = tk.Menu(menu, tearoff=0)
+        self._mode_var = tk.StringVar(value=self.mode)
+        mode_menu.add_radiobutton(label="日常自习（宽松）", value="daily",
+                                  variable=self._mode_var,
+                                  command=lambda: self._menu_mode("daily"))
+        mode_menu.add_radiobutton(label="考试冲刺（严格）", value="exam",
+                                  variable=self._mode_var,
+                                  command=lambda: self._menu_mode("exam"))
+        menu.add_cascade(label="多档模式", menu=mode_menu)
+
+        # 番茄钟
         label = "番茄钟：开启" if not self.pomodoro_enabled else "番茄钟：关闭"
         menu.add_command(label=label, command=self._menu_toggle_pomodoro)
         menu.add_separator()
+
+        menu.add_command(label="更换形象…", command=self._open_skin_dialog)
         menu.add_command(label="这个是学习用的！", command=self._menu_teach)
         menu.add_separator()
         menu.add_command(label="退出", command=self._menu_exit)
@@ -159,6 +216,12 @@ class PetApp:
         if self.on_toggle_pomodoro:
             self.on_toggle_pomodoro()
 
+    def _menu_mode(self, mode):
+        self.mode = mode
+        if self.on_mode_change:
+            self.on_mode_change(mode)
+        self._build_menu()
+
     def _menu_teach(self):
         if self.on_teach:
             self.on_teach(self.latest_info)
@@ -170,6 +233,108 @@ class PetApp:
         if allowed:
             self.closed = True
             self.root.destroy()
+
+    # ---------- 更换形象对话框 ----------
+    def _open_skin_dialog(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("更换形象")
+        dialog.geometry("360x440")
+        dialog.attributes("-topmost", True)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tk.Label(dialog, text="选择形象：", font=("Microsoft YaHei UI", 10)).pack(pady=(10, 2))
+
+        self._skin_preview = tk.Label(dialog, bg="#f0f0f0", width=160, height=120)
+        self._skin_preview.pack(pady=4)
+
+        listbox = tk.Listbox(dialog, width=30, height=8, font=("Microsoft YaHei UI", 10))
+        listbox.pack(padx=10, pady=4, fill="both", expand=True)
+        for name in self._list_skins():
+            listbox.insert("end", name)
+
+        def preview(event=None):
+            sel = listbox.curselection()
+            if not sel:
+                return
+            name = listbox.get(sel[0])
+            self._preview_skin(name, dialog)
+
+        listbox.bind("<<ListboxSelect>>", preview)
+
+        btn_bar = tk.Frame(dialog)
+        btn_bar.pack(pady=6)
+        tk.Button(btn_bar, text="导入新图片…", command=lambda: self._import_skin(listbox)).pack(side="left", padx=4)
+        tk.Button(btn_bar, text="使用", command=lambda: self._use_skin(listbox, dialog)).pack(side="left", padx=4)
+        tk.Button(btn_bar, text="关闭", command=dialog.destroy).pack(side="left", padx=4)
+
+        if listbox.size() > 0:
+            listbox.selection_set(0)
+            preview()
+
+    def _preview_skin(self, name, parent):
+        try:
+            if name == "default":
+                img = None
+            else:
+                path = os.path.join(SKINS_DIR, name, "pet.png")
+                img = tk.PhotoImage(file=path)
+            if img is None:
+                self._skin_preview.configure(image="", text="（程序化小猫）")
+                self._skin_preview_ref = None
+            else:
+                iw, ih = img.width(), img.height()
+                scale = min(1.0, 150 / iw, 110 / ih)
+                if scale < 1.0:
+                    factor_x = max(1, int(1 / scale))
+                    img = img.subsample(factor_x, factor_x)
+                self._skin_preview_ref = img
+                self._skin_preview.configure(image=img, text="")
+        except Exception:
+            self._skin_preview.configure(image="", text="无法预览")
+
+    def _use_skin(self, listbox, dialog):
+        sel = listbox.curselection()
+        if not sel:
+            return
+        name = listbox.get(sel[0])
+        self._set_skin(name)
+        dialog.destroy()
+
+    def _import_skin(self, listbox):
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="选择宠物图片（PNG 优先）",
+            filetypes=[("图片", "*.png *.jpg *.jpeg *.bmp *.webp"), ("所有文件", "*.*")],
+        )
+        if not path:
+            return
+        name = os.path.splitext(os.path.basename(path))[0] or "mypet"
+        out_dir = os.path.join(SKINS_DIR, name)
+        base = out_dir
+        i = 1
+        while os.path.exists(os.path.join(out_dir, "pet.png")):
+            out_dir = f"{base}_{i}"
+            i += 1
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, "pet.png")
+        try:
+            from tools.make_skin import build_skin
+            method = build_skin(path, out_path)
+        except Exception:
+            shutil.copy(path, out_path)
+            method = "copy"
+        if method == "rembg":
+            print("[pet] 新形象已生成（AI 抠图）")
+        elif method == "pillow":
+            print("[pet] 新形象已生成（白色去底）")
+        else:
+            print("[pet] 新形象已导入（原图）")
+        self._set_skin(os.path.basename(out_dir))
+        listbox.delete(0, "end")
+        for n in self._list_skins():
+            listbox.insert("end", n)
+        self.say("新形象来了！")
 
     # ---------- 监督线程 -> 主线程 ----------
     def say(self, text, seconds=4):
@@ -183,6 +348,12 @@ class PetApp:
 
     def set_pomodoro_enabled(self, enabled):
         self._queue.put(("pomodoro", (bool(enabled),)))
+
+    def set_level(self, level):
+        self._queue.put(("level", (int(max(1, level)),)))
+
+    def set_mode(self, mode):
+        self._queue.put(("mode", (mode,)))
 
     def update_info(self, info):
         self._queue.put(("info", (info,)))
@@ -201,6 +372,11 @@ class PetApp:
                     self._set_block_mode(args[0])
                 elif kind == "pomodoro":
                     self.pomodoro_enabled = args[0]
+                    self._build_menu()
+                elif kind == "level":
+                    self.level = args[0]
+                elif kind == "mode":
+                    self.mode = args[0]
                     self._build_menu()
                 elif kind == "info":
                     self.latest_info = args[0]
@@ -256,59 +432,85 @@ class PetApp:
         c.create_image(cx + shake, cy, image=self._skin_disp)
 
     def _draw_procedural(self, c, cx, cy, shake):
+        s = 1.0 + min(0.4, (self.level - 1) * 0.08)
         angry = self.mood >= 3
         body = BODY_ANGRY if angry else BODY_NORMAL
         outline = OUTLINE_ANGRY if angry else OUTLINE_NORMAL
+        if self.level >= 6:
+            outline = OUTLINE_GOLD
 
         # 耳朵
-        ear_l = [(cx - 30 + shake, cy - 34), (cx - 18 + shake, cy - 52), (cx - 6 + shake, cy - 32)]
-        ear_r = [(cx + 6 + shake, cy - 32), (cx + 18 + shake, cy - 52), (cx + 30 + shake, cy - 34)]
+        ear_l = [(cx - 30 * s + shake, cy - 34 * s),
+                 (cx - 18 * s + shake, cy - 52 * s),
+                 (cx - 6 * s + shake, cy - 32 * s)]
+        ear_r = [(cx + 6 * s + shake, cy - 32 * s),
+                 (cx + 18 * s + shake, cy - 52 * s),
+                 (cx + 30 * s + shake, cy - 34 * s)]
         c.create_polygon(ear_l, fill=body, outline=outline, width=2)
         c.create_polygon(ear_r, fill=body, outline=outline, width=2)
 
         # 身体
-        c.create_oval(cx - 40 + shake, cy - 40, cx + 40 + shake, cy + 40,
+        c.create_oval(cx - 40 * s + shake, cy - 40 * s, cx + 40 * s + shake, cy + 40 * s,
                       fill=body, outline=outline, width=3)
 
         # 腮红
         if self.mood >= 1:
             blush = "#ff8080" if self.mood >= 3 else BLUSH
-            c.create_oval(cx - 34 + shake, cy + 6, cx - 22 + shake, cy + 16, fill=blush, outline="")
-            c.create_oval(cx + 22 + shake, cy + 6, cx + 34 + shake, cy + 16, fill=blush, outline="")
+            c.create_oval(cx - 34 * s + shake, cy + 6 * s, cx - 22 * s + shake, cy + 16 * s,
+                          fill=blush, outline="")
+            c.create_oval(cx + 22 * s + shake, cy + 6 * s, cx + 34 * s + shake, cy + 16 * s,
+                          fill=blush, outline="")
 
         # 眼睛（眨眼）
         blinking = (self._t % self._blink_period) < 0.18
-        eye_y = cy - 10
+        eye_y = cy - 10 * s
         if blinking:
-            c.create_line(cx - 16 + shake, eye_y, cx - 8 + shake, eye_y, fill="#4a3728", width=2)
-            c.create_line(cx + 8 + shake, eye_y, cx + 16 + shake, eye_y, fill="#4a3728", width=2)
+            c.create_line(cx - 16 * s + shake, eye_y, cx - 8 * s + shake, eye_y, fill="#4a3728", width=2)
+            c.create_line(cx + 8 * s + shake, eye_y, cx + 16 * s + shake, eye_y, fill="#4a3728", width=2)
         else:
-            c.create_oval(cx - 17 + shake, eye_y - 6, cx - 7 + shake, eye_y + 6, fill="#4a3728", outline="")
-            c.create_oval(cx + 7 + shake, eye_y - 6, cx + 17 + shake, eye_y + 6, fill="#4a3728", outline="")
+            c.create_oval(cx - 17 * s + shake, eye_y - 6 * s, cx - 7 * s + shake, eye_y + 6 * s,
+                          fill="#4a3728", outline="")
+            c.create_oval(cx + 7 * s + shake, eye_y - 6 * s, cx + 17 * s + shake, eye_y + 6 * s,
+                          fill="#4a3728", outline="")
 
         # 眉毛（不耐烦/生气）
         if self.mood >= 2:
-            c.create_line(cx - 18 + shake, eye_y - 12, cx - 6 + shake, eye_y - 8, fill="#4a3728", width=2)
-            c.create_line(cx + 6 + shake, eye_y - 8, cx + 18 + shake, eye_y - 12, fill="#4a3728", width=2)
+            c.create_line(cx - 18 * s + shake, eye_y - 12 * s, cx - 6 * s + shake, eye_y - 8 * s,
+                          fill="#4a3728", width=2)
+            c.create_line(cx + 6 * s + shake, eye_y - 8 * s, cx + 18 * s + shake, eye_y - 12 * s,
+                          fill="#4a3728", width=2)
 
         # 嘴
-        mouth_y = cy + 10
+        mouth_y = cy + 10 * s
         if self.mood == 0:      # 开心：微笑
-            c.create_arc(cx - 12 + shake, mouth_y - 8, cx + 12 + shake, mouth_y + 12,
+            c.create_arc(cx - 12 * s + shake, mouth_y - 8 * s, cx + 12 * s + shake, mouth_y + 12 * s,
                          start=180, extent=180, style="arc", outline="#4a3728", width=2)
         elif self.mood == 1:    # 好奇：小 O
-            c.create_oval(cx - 3 + shake, mouth_y - 3, cx + 3 + shake, mouth_y + 3,
+            c.create_oval(cx - 3 * s + shake, mouth_y - 3 * s, cx + 3 * s + shake, mouth_y + 3 * s,
                           fill="#4a3728", outline="")
         elif self.mood == 2:    # 不耐烦：直线
-            c.create_line(cx - 8 + shake, mouth_y, cx + 8 + shake, mouth_y,
+            c.create_line(cx - 8 * s + shake, mouth_y, cx + 8 * s + shake, mouth_y,
                           fill="#4a3728", width=2)
         else:                   # 生气/暴怒：倒弧 + 咬牙
-            c.create_arc(cx - 12 + shake, mouth_y - 4, cx + 12 + shake, mouth_y + 12,
+            c.create_arc(cx - 12 * s + shake, mouth_y - 4 * s, cx + 12 * s + shake, mouth_y + 12 * s,
                          start=0, extent=180, style="arc", outline="#4a3728", width=2)
             if self.mood >= 4:
-                for dx in (-5, 0, 5):
-                    c.create_line(cx + dx + shake, mouth_y + 4, cx + dx + shake, mouth_y + 9,
+                for dx in (-5 * s, 0, 5 * s):
+                    c.create_line(cx + dx + shake, mouth_y + 4 * s, cx + dx + shake, mouth_y + 9 * s,
                                   fill="#4a3728", width=1)
+
+        # 皇冠（Lv>=4）
+        if self.level >= 4:
+            top = cy - 52 * s
+            pts = [(cx - 14 * s + shake, top), (cx - 9 * s + shake, top - 14 * s),
+                   (cx - 4 * s + shake, top - 6 * s), (cx + 4 * s + shake, top - 6 * s),
+                   (cx + 9 * s + shake, top - 14 * s), (cx + 14 * s + shake, top),
+                   (cx - 14 * s + shake, top)]
+            c.create_polygon(pts, fill="#ffd700", outline="#c9a400", width=1)
+
+        # 等级角标
+        c.create_text(cx + shake, cy + 40 * s + 14, text=f"Lv.{self.level}",
+                      fill="#777777", font=("Microsoft YaHei UI", 8))
 
     def _draw_bubble(self, c, w, h):
         if not self.bubble_text or time.time() > self._bubble_until:

@@ -33,5 +33,9 @@
     "enabled": true,
     "device_index": 1,
     "interval_seconds": 1
+  },
+  "screen_analysis": {
+    "enabled": true,
+    "interval_seconds": 10
   }
 }

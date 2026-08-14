@@ -37,6 +37,10 @@ DEFAULTS = {
         "device_index": 0,
         "interval_seconds": 1,
     },
+    "screen_analysis": {
+        "enabled": True,
+        "interval_seconds": 10,
+    },
 }
 
 

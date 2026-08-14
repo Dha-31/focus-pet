@@ -140,6 +140,10 @@ def run_app():
         except Exception as exc:
             print("[bridge] 桥接服务启动失败：", exc)
 
+    # 截图画面分析（v2.5）：快速通道判定不了时，本地看画面
+    screen_analysis_enabled = bool(cfg["screen_analysis"]["enabled"])
+    screen_interval = max(5, float(cfg["screen_analysis"]["interval_seconds"]))
+    last_screen_analyze = [0.0]
     # 摄像头监督（可选，v2）：后端在后台线程创建，不阻塞桌宠启动
     camera_monitor = None
     camera_error_shown = [False]
@@ -247,6 +251,24 @@ def run_app():
                 elif cam.get("phone_suspicion"):
                     cat = "distraction"    # 疑似玩手机
 
+            # ---- 截图画面分析（v2.5）：快速通道判定不了时，本地看画面 ----
+            screen_derived = False
+            if cat == "unknown" and screen_analysis_enabled:
+                now = time.time()
+                if now - last_screen_analyze[0] >= screen_interval:
+                    last_screen_analyze[0] = now
+                    try:
+                        from sensors.screen_analyzer import analyze_foreground
+                        result = analyze_foreground(info.get("hwnd"))
+                    except Exception:
+                        result = None
+                    if result and result["category"] in ("study", "distraction"):
+                        cat = result["category"]
+                        screen_derived = True
+                        logbook.log_event(
+                            "screen_analysis",
+                            f"{result['category']}（{'、'.join(result['reasons']) or '画面特征'}）",
+                        )
             # 番茄钟（可开关）
             if pomodoro.enabled and pomodoro.state == "idle":
                 pomodoro.start()
@@ -261,6 +283,8 @@ def run_app():
 
             is_distraction = cat == "distraction"
             tier = meter.update(is_distraction, poll)
+            if screen_derived:
+                tier = min(tier, 1)  # 画面分析是启发式，只提醒不暴力关
             pet.set_mood(meter.mood)
             session.tick(cat == "study", poll)
 
@@ -271,7 +295,12 @@ def run_app():
                     pet.say("欢迎回来！")
                 blocker.reset()
             else:
-                if cam and cam.get("phone_suspicion"):
+                if screen_derived:
+                    # 画面分析判定为分心：只提醒，不暴力关
+                    if cat != last_cat:
+                        pet.say("这个画面看起来不像在学习哦~")
+                    blocker.reset()
+                elif cam and cam.get("phone_suspicion"):
                     # 玩手机：关不了手机，只能提醒
                     if cat != last_cat:
                         pet.say("别玩手机啦！")
@@ -302,6 +331,15 @@ def run_app():
         stop_event.set()
     print("桌宠已退出。晚安！")
 
+
+def screen_check():
+    """截图画面分析自检：截当前窗口画面并打印分析结果。"""
+    from sensors.screen_analyzer import analyze_foreground
+    from sensors.window_monitor import get_foreground_info
+    info = get_foreground_info()
+    print("当前窗口:", info)
+    result = analyze_foreground(info["hwnd"] if info else None)
+    print("分析结果:", result)
 
 def camera_setup():
     """打开摄像头设置窗口（图形界面）：实时预览 + 选择前置/后置 + 保存。"""
@@ -343,6 +381,7 @@ def main():
     parser.add_argument("--headless-check", action="store_true", help="无界面自检核心逻辑")
     parser.add_argument("--camera-check", action="store_true", help="摄像头自检（约 5 秒）")
     parser.add_argument("--camera-setup", action="store_true", help="打开摄像头设置窗口（图形界面）")
+    parser.add_argument("--screen-check", action="store_true", help="截图画面分析自检")
     parser.add_argument("--status", action="store_true", help="查看配置与最近记录")
     parser.add_argument("--log", action="store_true", help="查看分心日志")
     args = parser.parse_args()
@@ -353,6 +392,8 @@ def main():
         camera_check()
     elif args.camera_setup:
         camera_setup()
+    elif args.screen_check:
+        screen_check()
     elif args.status:
         print_status()
     elif args.log:

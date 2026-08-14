@@ -1,4 +1,4 @@
-"""tools/make_skin.py：把一张图片做成桌宠皮肤。
+﻿"""tools/make_skin.py：把一张图片做成桌宠皮肤。
 
 用法：
   python tools/make_skin.py <图片路径> [皮肤名]
@@ -93,6 +93,16 @@ def main():
         print("提示：未安装 pillow/rembg，无法自动去背景。请准备透明背景 PNG，")
         print("或运行: pip install pillow rembg")
 
+    # 生成主题清单（v3.5）：所有状态先回退 pet.png，可逐状态替换
+    manifest = {
+        "name": name,
+        "fallback": "pet.png",
+        "states": {},
+        "说明": "把 happy.png / angry.png / furious.png / celebrate.png / error.png / sleep.png 放进本目录即可单独换该状态的表情。",
+    }
+    with open(os.path.join(out_dir, "theme.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
     # 更新配置
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -101,6 +111,7 @@ def main():
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
         print(f"已把 pet.skin 设为: {name}，重启桌宠生效")
+    print("已生成 theme.json：放 angry.png / celebrate.png 等即可单独换该状态表情")
 
 
 if __name__ == "__main__":

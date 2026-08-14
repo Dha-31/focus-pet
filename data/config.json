@@ -29,7 +29,9 @@
     "exit_code": "1234"
   },
   "pet": {
-    "skin": "default"
+    "skin": "default",
+    "window_x": 1230,
+    "window_y": 670
   },
   "extension": {
     "enabled": true,

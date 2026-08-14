@@ -18,6 +18,8 @@ import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from ui.theme_ui import BG, accent_button, add_header
+
 # 减少 mediapipe 日志（需在 import mediapipe 前设置）
 os.environ.setdefault("GLOG_minloglevel", "2")
 
@@ -52,6 +54,7 @@ class CameraSetupWindow:
         self.root.title("Focus Pet - 摄像头设置")
         self.root.geometry("640x600")
         self.root.resizable(False, False)
+        self.root.configure(bg=BG)
 
         self.devices = []
         self.current_idx = None
@@ -92,13 +95,14 @@ class CameraSetupWindow:
 
     # ---------- UI ----------
     def _build_ui(self):
+        add_header(self.root, "摄像头设置", "选一台能看到自己脸的设备（本地处理，不上传）").pack(padx=14, pady=(12, 0), anchor="w")
         self.preview = tk.Label(self.root, bg="black", width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT)
         self.preview.pack(padx=10, pady=(10, 4))
 
         self.status_var = tk.StringVar(value="正在扫描摄像头…")
         tk.Label(self.root, textvariable=self.status_var, font=("Microsoft YaHei UI", 11)).pack(pady=2)
 
-        bar = tk.Frame(self.root)
+        bar = tk.Frame(self.root, bg=BG)
         bar.pack(pady=6)
         tk.Button(bar, text="◀ 上一台", width=10, command=self.prev_device).pack(side="left", padx=4)
         tk.Button(bar, text="下一台 ▶", width=10, command=self.next_device).pack(side="left", padx=4)
@@ -106,10 +110,9 @@ class CameraSetupWindow:
         self.device_combo.pack(side="left", padx=8)
         self.device_combo.bind("<<ComboboxSelected>>", self._on_combo)
 
-        bottom = tk.Frame(self.root)
+        bottom = tk.Frame(self.root, bg=BG)
         bottom.pack(pady=8)
-        tk.Button(bottom, text="✅ 使用这台并保存", width=18,
-                  bg="#5cb85c", fg="white", command=self.save_and_close).pack(side="left", padx=6)
+        accent_button(bottom, "✅ 使用这台并保存", self.save_and_close).pack(side="left", padx=6)
         tk.Button(bottom, text="退出", width=10, command=self.close).pack(side="left", padx=6)
 
         self.hint_var = tk.StringVar(value="提示：切换到能看到自己脸的设备，保存后重启桌宠生效")

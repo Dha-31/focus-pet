@@ -181,3 +181,59 @@ def draw_expression_overlay(c, hx, hy, hr, mood):
                       fill="#e05050", width=width)
         c.create_line(hx + hr * 0.9, hy - hr * 0.35, hx + hr * 1.2, hy - hr * 0.1,
                       fill="#e05050", width=width)
+# ---------- v3.5：状态特效（庆祝/错误/睡眠/阴影） ----------
+
+
+def draw_shadow(c, cx, cy, r):
+    """宠物脚下柔和的影子，让悬浮感更自然。"""
+    for i in range(4, 0, -1):
+        alpha = "#e8e8e8" if i == 1 else f"#{200 - i * 20:02x}{200 - i * 20:02x}{200 - i * 20:02x}"
+        c.create_oval(cx - r * (0.6 + i * 0.08), cy + r * (0.75 + i * 0.04),
+                      cx + r * (0.6 + i * 0.08), cy + r * (0.9 + i * 0.04),
+                      fill=alpha, outline="")
+
+
+def draw_celebrate_effects(c, cx, cy, t, r=40.0):
+    """完成/成就庆祝：彩带 + 星光（随时间旋转飘散）。"""
+    import math
+    n = 10
+    for i in range(n):
+        a = t * 2.2 + i * (math.pi * 2 / n)
+        dist = r * (1.0 + 0.25 * math.sin(t * 3 + i))
+        x = cx + math.cos(a) * dist
+        y = cy - r * 0.4 + math.sin(a) * dist * 0.6
+        colors = ["#ffd166", "#ff6b6b", "#6bc9ff", "#95e06c", "#ff9ec7"]
+        size = 3 + (i % 3)
+        c.create_oval(x - size, y - size, x + size, y + size, fill=colors[i % 5], outline="")
+        # 小星星
+        if i % 3 == 0:
+            c.create_text(x + 8, y - 6, text="✦", fill="#ffd166",
+                          font=("Microsoft YaHei UI", 9))
+
+
+def draw_error_effects(c, cx, cy, t, r=40.0):
+    """出错反馈：红色感叹号 + 抖动汗滴。"""
+    import math
+    shake = math.sin(t * 30) * 2
+    x = cx + shake
+    # 感叹号
+    c.create_rectangle(x - 4, cy - r * 0.9 - 14, x + 4, cy - r * 0.9 - 2,
+                       fill="#e05050", outline="")
+    c.create_oval(x - 4, cy - r * 0.9 + 2, x + 4, cy - r * 0.9 + 10,
+                  fill="#e05050", outline="")
+    # 汗滴
+    c.create_oval(cx - r * 0.9, cy - r * 0.7, cx - r * 0.9 + 7, cy - r * 0.7 + 10,
+                  fill="#6bc9ff", outline="")
+
+
+def draw_sleep_effects(c, cx, cy, t, r=40.0):
+    """睡觉：飘浮的 z Z Z。"""
+    base = t % 3.0
+    for i, ch in enumerate(("z", "Z", "Z")):
+        phase = (base - i * 0.8) % 3.0
+        if phase > 2.2:
+            continue
+        y = cy - r * 1.1 - i * 14 - phase * 8
+        x = cx + r * 0.75 + i * 7
+        c.create_text(x, y, text=ch, fill="#7a9bd4",
+                      font=("Microsoft YaHei UI", 10 + i * 2))

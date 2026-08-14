@@ -1,4 +1,4 @@
-"""Focus Pet 入口。
+﻿"""Focus Pet 入口。
 
 用法：
   python main.py                 # 启动桌宠 + 监督循环（Windows 桌面环境）
@@ -69,6 +69,28 @@ def headless_check():
         session.tick(True, 1.0)
     summary = session.end()
     print(f"  会话总结: focus={summary['focus_minutes']} 分钟")
+    # ---- v3.5：状态机 + 主题资源包 + 单实例 ----
+    from core.state_machine import PetStateMachine
+    _sm = PetStateMachine()
+    _sm.set_mood(0); assert _sm.current() == "happy"
+    _sm.set_mood(2); assert _sm.current() == "annoyed"
+    _sm.set_mood(4); assert _sm.current() == "furious"
+    _sm.play("celebrate", 0.6); assert _sm.current() == "celebrate"
+    import time as _t
+    _t.sleep(0.7)
+    _sm.set_mood(1); assert _sm.current() == "curious"
+    _sm.set_sleeping(True); assert _sm.current() == "sleep"
+    _sm.set_sleeping(False)
+    print("  v3.5 状态机 -> OK（happy/curious/annoyed/angry/furious + celebrate/error/sleep）")
+
+    from core import theme as _theme
+    print(f"  v3.5 主题资源包 -> OK（皮肤列表: {_theme.iter_skins()}，状态槽位: {len(_theme.THEME_STATES)} 个）")
+
+    from core import single_instance
+    _ok = single_instance.acquire()
+    single_instance.release()
+    print(f"  v3.5 单实例锁 -> OK（acquire={_ok}）")
+
     print("== 自检结束（核心逻辑正常） ==")
 
 
@@ -130,6 +152,12 @@ def run_app():
     from ui.pet_app import PetApp
     from bridge.server import start_bridge, get_latest_url
 
+    from core import single_instance
+    if not single_instance.acquire():
+        print("Focus Pet 已经在运行了（单实例）。")
+        print("如果桌宠不见了，请到托盘图标右键 -> 退出，或任务管理器结束 Python 进程。")
+        sys.exit(0)
+
     cfg = load_config()
     rules = RuleEngine()
     session = StudySession()
@@ -167,12 +195,14 @@ def run_app():
 
     # 浏览器扩展桥接服务（可选）
     bridge = None
+    bridge_error = None
     if ext_enabled:
         try:
             bridge = start_bridge(rules, port=int(cfg["extension"]["port"]))
             print(f"[bridge] 本地桥接服务已启动，端口 {cfg['extension']['port']}（供浏览器扩展连接）")
         except Exception as exc:
             print("[bridge] 桥接服务启动失败：", exc)
+            bridge_error = exc
 
     # 截图画面分析（v2.5）：快速通道判定不了时，本地看画面
     screen_analysis_enabled = bool(cfg["screen_analysis"]["enabled"])
@@ -214,9 +244,9 @@ def run_app():
             return
         logbook.log_event("session_end", summary["goal"])
         check_achievements()
-        pet.say(f"结束！专注 {summary['focus_minutes']} 分钟，"
-                f"分心 {summary['distract_minutes']} 分钟，"
-                f"好感度 {pet_state.affinity:.0f}")
+        pet.celebrate(f"结束！专注 {summary['focus_minutes']} 分钟，"
+                      f"分心 {summary['distract_minutes']} 分钟，"
+                      f"好感度 {pet_state.affinity:.0f}")
 
     def on_toggle_pomodoro():
         cfg["pomodoro"]["enabled"] = not cfg["pomodoro"]["enabled"]
@@ -243,7 +273,7 @@ def run_app():
             (AchievementManager.get(aid) or {}).get("name", aid) for aid in newly)
         reward = len(newly) * settings.get("economy.achievement_reward", REWARD_COINS)
         inventory.add_coins(reward)
-        pet.say(f"🎉 解锁成就：{names}（+{reward} 币）")
+        pet.celebrate(f"🎉 解锁成就：{names}（+{reward} 币）")
         logbook.log_event("achievement", f"解锁 {names}")
 
     def on_open_achievements():
@@ -296,7 +326,30 @@ def run_app():
                  on_mode_change=on_toggle_mode, on_exit=on_exit,
                  on_open_achievements=on_open_achievements,
                  on_open_report=on_open_report,
-                 on_open_settings=on_open_settings)
+                 on_open_settings=on_open_settings,
+                 tray_enabled=True)
+
+    # 系统托盘（v3.5）：失败也不影响桌宠
+    tray = None
+    try:
+        from ui.tray import TrayIcon
+        tray = TrayIcon(
+            tooltip="Focus Pet 学习监督桌宠",
+            on_start=lambda: pet._menu_start_study(),
+            on_end=lambda: pet._menu_end_study(),
+            on_toggle=lambda: pet.toggle_visible(),
+            on_quit=lambda: pet._menu_exit())
+        if tray.is_ok():
+            print("[tray] 系统托盘已启用：双击显示/隐藏，右键菜单")
+        else:
+            tray = None
+            pet.tray_enabled = False
+    except Exception as exc:
+        print("[tray] 托盘不可用:", exc)
+        tray = None
+        pet.tray_enabled = False
+    if bridge_error:
+        pet.show_error(f"浏览器扩展桥接启动失败：{bridge_error}")
     pomodoro.on_state_change = lambda state: (
         pet.say("专注时间到！" if state == "focus" else "休息时间到啦，去喝口水吧~"))
 
@@ -330,11 +383,13 @@ def run_app():
             if cam and cam.get("error") and not camera_error_shown[0]:
                 camera_error_shown[0] = True
                 print("[camera]", cam["error"])
+                pet.show_error("摄像头出问题了，先不盯镜头啦")
             if cam and not cam.get("error") and cam.get("backend") != "none":
                 if not cam.get("person_present"):
-                    # 人不在：不计专注、不生气、不阻断
+                    # 人不在：不计专注、不生气、不阻断，宠物睡觉
                     meter.update(False, poll)
                     pet.set_mood(0)
+                    pet.set_sleeping(True)
                     blocker.reset()
                     session.tick(False, poll)
                     if last_cat != "away":
@@ -398,14 +453,16 @@ def run_app():
             elif is_distraction:
                 pet_state.add_distraction(poll)
             if pet_state.consume_level_up():
-                pet.say(f"🎉 我升到 Lv.{pet_state.level} 啦！")
+                pet.celebrate(f"🎉 我升到 Lv.{pet_state.level} 啦！")
                 check_achievements()
             pet.set_level(pet_state.level)
 
             if tier == 0:
                 if last_cat == "distraction" and cat != "distraction":
+                    pet.set_sleeping(False)
                     pet.say("回来啦，继续加油！")
                 elif last_cat == "away":
+                    pet.set_sleeping(False)
                     pet.say("欢迎回来！")
                 blocker.reset()
             else:
@@ -443,6 +500,15 @@ def run_app():
         pass
     finally:
         stop_event.set()
+        if tray is not None:
+            try:
+                tray.destroy()
+            except Exception:
+                pass
+        try:
+            single_instance.release()
+        except Exception:
+            pass
     print("桌宠已退出。晚安！")
 
 
@@ -454,6 +520,22 @@ def screen_check():
     print("当前窗口:", info)
     result = analyze_foreground(info["hwnd"] if info else None)
     print("分析结果:", result)
+
+def import_theme_cli(path):
+    """命令行导入主题包 zip 并设为当前形象。"""
+    from core import theme as theme_mod
+    ok, msg = theme_mod.import_theme_zip(path)
+    if not ok:
+        print("导入失败：", msg)
+        sys.exit(1)
+    print(msg)
+    name = msg.split(": ")[-1]
+    from core.config import load_config, save_config
+    cfg = load_config()
+    cfg.setdefault("pet", {})["skin"] = name
+    save_config(cfg)
+    print(f"已把 pet.skin 设为: {name}，下次启动桌宠生效")
+
 
 def open_settings():
     """直接打开集中配置编辑器（不需要先启动桌宠）。"""
@@ -506,6 +588,7 @@ def main():
     parser.add_argument("--camera-setup", action="store_true", help="打开摄像头设置窗口（图形界面）")
     parser.add_argument("--screen-check", action="store_true", help="截图画面分析自检")
     parser.add_argument("--settings", action="store_true", help="打开集中配置编辑器（不用先开桌宠）")
+    parser.add_argument("--import-theme", metavar="ZIP", help="导入主题包 zip 并设为当前形象")
     parser.add_argument("--status", action="store_true", help="查看配置与最近记录")
     parser.add_argument("--log", action="store_true", help="查看分心日志")
     args = parser.parse_args()
@@ -518,6 +601,8 @@ def main():
         camera_setup()
     elif args.screen_check:
         screen_check()
+    elif args.import_theme:
+        import_theme_cli(args.import_theme)
     elif args.settings:
         open_settings()
     elif args.status:
@@ -530,3 +615,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+

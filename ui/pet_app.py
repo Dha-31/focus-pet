@@ -1,12 +1,14 @@
-"""桌宠窗口：透明置顶小窗 + Canvas 程序化形象（v3 增强）。
+"""桌宠窗口：透明置顶小窗 + Canvas 程序化形象（v3.5 状态机 + 主题资源包）。
 
-功能：
-- 上下浮动、眨眼、按情绪切换表情（开心/好奇/不耐烦/生气/暴怒）
-- 生气时脸红、抖动；说话气泡自动消失
-- 可拖拽移动；右键菜单：开始学习 / 结束学习 / 多档模式 / 更换形象 / 教宠物 / 退出
-- 养成外观：随等级长大，Lv.4 戴皇冠，Lv.6 金色描边，显示 Lv 角标
-- 阻断 Lv2 时放大挡在屏幕中间
-- 皮肤系统：skins/<名字>/pet.png 存在则用图片形象；右键"更换形象"可切换/导入新图
+v3.5 升级：
+- 事件→状态→动画 状态机（core/state_machine.py）：情绪状态 happy/curious/annoyed/
+  angry/furious + 瞬时状态 celebrate/error + 持续状态 sleep
+- 主题资源包（core/theme.py）：皮肤目录里每个状态一张图（angry.png/furious.png/
+  celebrate.png/error.png/sleep.png…），没有就回退 pet.png / 程序化小猫
+- 完成庆祝动画、出错反馈动画、睡觉 Zzz、脚下阴影
+- 位置记忆：记住宠物放在哪，重启后回到原位
+- 导入主题包 zip（右键菜单）
+- 托盘联动：可隐藏到托盘（托盘在 main.py 创建）
 
 线程安全：监督线程通过消息队列 -> 主线程 after() 轮询，不直接操作 Tk 控件。
 """
@@ -19,8 +21,11 @@ import time
 import tkinter as tk
 from tkinter import filedialog, simpledialog
 
+from core import theme as theme_mod
 from core.economy import Inventory
+from core.state_machine import PetStateMachine
 from ui import pet_renderer
+from ui.theme_ui import accent_button, add_header
 from ui.skin_face import detect_face_meta
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,19 +36,12 @@ TRANSPARENT_BG = "#010203"
 NORMAL_SIZE = (170, 170)
 BLOCK_SIZE = (460, 320)
 
-BODY_NORMAL = "#ffe0b3"
-BODY_ANGRY = "#f7b9b9"
-OUTLINE_NORMAL = "#e8a95b"
-OUTLINE_ANGRY = "#d9534f"
-OUTLINE_GOLD = "#d4a017"
-BLUSH = "#ffb3b3"
-
 
 class PetApp:
     def __init__(self, config, mode="daily", inventory=None, on_teach=None,
                  on_start_study=None, on_end_study=None, on_toggle_pomodoro=None,
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
-                 on_open_report=None, on_open_settings=None):
+                 on_open_report=None, on_open_settings=None, tray_enabled=False):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
@@ -54,10 +52,11 @@ class PetApp:
         self.on_open_report = on_open_report
         self.on_open_settings = on_open_settings
 
-        self.mood = 0
+        self.sm = PetStateMachine()          # 事件->状态->动画 状态机
+        self.mood = 0                        # 兼容字段（情绪值）
         self.block_mode = False
         self.level = 1
-        self.mode = mode if mode in ("daily", "exam") else "daily"
+        self.mode = mode if mode in ("daily", "exam", "relaxed", "custom") else "daily"
         self.pomodoro_enabled = bool(config["pomodoro"]["enabled"])
         self.bubble_text = ""
         self._bubble_until = 0.0
@@ -65,10 +64,12 @@ class PetApp:
         self._blink_period = 3.0
         self.latest_info = None
         self.closed = False
+        self.tray_enabled = bool(tray_enabled)
 
         self._queue = queue.Queue()
-        self.image_skin = self._load_skin(config)
-        self._skin_disp = None  # 缩放后的显示用图片（防止被垃圾回收）
+        self.theme_name = config.get("pet", {}).get("skin", "default")
+        self._skin_img_cache = {}            # 状态 -> PhotoImage
+        self._skin_disp = {}                 # 状态 -> 缩放后的显示图
         self.inventory = inventory if inventory is not None else Inventory()
         self.accessory = self.inventory.equipped_accessory
         self.skin_face = self._load_skin_face(config)
@@ -89,7 +90,15 @@ class PetApp:
         except tk.TclError:
             pass
 
-        self._normal_pos = None  # 普通模式下窗口位置 (x, y)
+        # 位置记忆：从配置恢复上次位置
+        self._normal_pos = None
+        try:
+            _wx = config.get("pet", {}).get("window_x")
+            _wy = config.get("pet", {}).get("window_y")
+            if isinstance(_wx, (int, float)) and isinstance(_wy, (int, float)):
+                self._normal_pos = (int(_wx), int(_wy))
+        except Exception:
+            pass
         self._set_geometry(NORMAL_SIZE)
 
         self.canvas = tk.Canvas(self.root, bg=TRANSPARENT_BG, highlightthickness=0)
@@ -100,52 +109,56 @@ class PetApp:
         self._poll_queue()
         self._anim()
 
-    # ---------- 皮肤 ----------
+    # ---------- 皮肤 / 主题 ----------
     @staticmethod
     def _load_skin(config):
-        name = config["pet"]["skin"]
+        """兼容旧接口：返回兜底 pet.png 的 PhotoImage（不再使用）。"""
+        name = config.get("pet", {}).get("skin", "default")
         if name and name != "default":
             path = os.path.join(SKINS_DIR, name, "pet.png")
             if os.path.exists(path):
                 try:
                     return tk.PhotoImage(file=path)
-                except Exception as exc:
-                    print("[pet] 皮肤加载失败，回退到程序化形象：", exc)
+                except Exception:
+                    pass
         return None
 
     def reload_skin(self):
-        """按当前配置重新加载皮肤（更换形象后调用）。"""
+        """按当前配置重新加载主题（更换形象/导入主题包后调用）。"""
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8-sig") as f:
                 cfg = json.load(f)
         except Exception:
             return
-        self.image_skin = self._load_skin(cfg)
-        self._skin_disp = None
+        self.theme_name = cfg.get("pet", {}).get("skin", "default")
+        self._skin_img_cache.clear()
+        self._skin_disp.clear()
+        self.skin_face = self._load_skin_face(cfg)
+
+    def _image_for(self, state):
+        """按状态取主题图（带缓存）；没有返回 None。"""
+        if self.theme_name == "default":
+            return None
+        if state in self._skin_img_cache:
+            return self._skin_img_cache[state]
+        path = theme_mod.resolve_image_file(self.theme_name, state)
+        if not path:
+            self._skin_img_cache[state] = None
+            return None
+        try:
+            img = tk.PhotoImage(file=path)
+        except Exception as exc:
+            print("[pet] 主题图加载失败（", path, "）:", exc)
+            img = None
+        self._skin_img_cache[state] = img
+        return img
 
     def _load_skin_face(self, config):
         """读取皮肤的人脸元数据（导入时自动检测生成）。"""
-        name = config["pet"]["skin"]
-        if name and name != "default":
-            path = os.path.join(SKINS_DIR, name, "pet.json")
-            if os.path.exists(path):
-                try:
-                    with open(path, "r", encoding="utf-8-sig") as f:
-                        data = json.load(f)
-                    return data.get("face") or data
-                except Exception:
-                    pass
-        return None
+        return theme_mod.face_meta(config.get("pet", {}).get("skin", "default"))
 
     def _list_skins(self):
-        """返回可用皮肤名列表（含 default）。"""
-        names = ["default"]
-        if os.path.isdir(SKINS_DIR):
-            for entry in sorted(os.listdir(SKINS_DIR)):
-                d = os.path.join(SKINS_DIR, entry)
-                if os.path.isdir(d) and os.path.exists(os.path.join(d, "pet.png")):
-                    names.append(entry)
-        return names
+        return theme_mod.iter_skins()
 
     def _set_skin(self, name):
         if name not in self._list_skins():
@@ -161,13 +174,15 @@ class PetApp:
         self.reload_skin()
         self.say("形象已更换！")
 
-    # ---------- 窗口几何 ----------
+    # ---------- 窗口几何 / 位置记忆 ----------
     def _set_geometry(self, size):
         w, h = size
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         if self._normal_pos:
             x, y = self._normal_pos
+            x = max(0, min(int(x), max(0, sw - w)))
+            y = max(0, min(int(y), max(0, sh - h)))
         else:
             x = sw - w - 40
             y = sh - h - 120
@@ -175,11 +190,49 @@ class PetApp:
         if size == NORMAL_SIZE:
             self._normal_pos = (x, y)
 
+    def _save_position(self):
+        """把当前位置写回配置（位置记忆）。"""
+        if self._normal_pos is None:
+            return
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8-sig") as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+        cfg.setdefault("pet", {})["window_x"] = int(self._normal_pos[0])
+        cfg.setdefault("pet", {})["window_y"] = int(self._normal_pos[1])
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+
     def _center_for_block(self):
         w, h = BLOCK_SIZE
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         self.root.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+
+    def hide(self):
+        """隐藏到托盘（托盘双击/菜单可唤回）。"""
+        try:
+            self.root.withdraw()
+        except Exception:
+            pass
+
+    def show(self):
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.attributes("-topmost", True)
+        except Exception:
+            pass
+
+    def toggle_visible(self):
+        try:
+            if self.root.state() == "withdrawn" or not self.root.winfo_viewable():
+                self.show()
+            else:
+                self.hide()
+        except Exception:
+            self.show()
 
     # ---------- 拖拽 ----------
     def _setup_drag(self):
@@ -201,6 +254,7 @@ class PetApp:
     def _drag_end(self, event):
         self._drag = None
         self._normal_pos = (self.root.winfo_x(), self.root.winfo_y())
+        self._save_position()   # 位置记忆
 
     # ---------- 右键菜单 ----------
     def _build_menu(self):
@@ -232,12 +286,15 @@ class PetApp:
         menu.add_separator()
 
         menu.add_command(label="更换形象…", command=self._open_skin_dialog)
+        menu.add_command(label="导入主题包…", command=self._import_theme_zip)
         menu.add_command(label="商店…", command=self._open_shop)
         menu.add_command(label="我的空间…", command=self._open_space)
         menu.add_command(label="成就…", command=self._menu_achievements)
         menu.add_command(label="数据报表…", command=self._menu_report)
         menu.add_command(label="设置…", command=self._menu_settings)
         menu.add_command(label="这个是学习用的！", command=self._menu_teach)
+        if self.tray_enabled:
+            menu.add_command(label="隐藏到托盘", command=self.hide)
         menu.add_separator()
         menu.add_command(label="退出", command=self._menu_exit)
         self.canvas.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
@@ -274,6 +331,7 @@ class PetApp:
         if self.on_exit:
             allowed = bool(self.on_exit())
         if allowed:
+            self._save_position()   # 位置记忆
             self.closed = True
             self.root.destroy()
 
@@ -317,12 +375,12 @@ class PetApp:
     def _open_skin_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("更换形象")
-        dialog.geometry("360x440")
+        dialog.geometry("360x460")
         dialog.attributes("-topmost", True)
         dialog.transient(self.root)
         dialog.grab_set()
 
-        tk.Label(dialog, text="选择形象：", font=("Microsoft YaHei UI", 10)).pack(pady=(10, 2))
+        add_header(dialog, "更换形象", "选一个形象，或导入你自己的图片 / 主题包").pack(padx=14, pady=(10, 0), anchor="w")
 
         self._skin_preview = tk.Label(dialog, bg="#f0f0f0", width=160, height=120)
         self._skin_preview.pack(pady=4)
@@ -344,7 +402,8 @@ class PetApp:
         btn_bar = tk.Frame(dialog)
         btn_bar.pack(pady=6)
         tk.Button(btn_bar, text="导入新图片…", command=lambda: self._import_skin(listbox)).pack(side="left", padx=4)
-        tk.Button(btn_bar, text="使用", command=lambda: self._use_skin(listbox, dialog)).pack(side="left", padx=4)
+        tk.Button(btn_bar, text="导入主题包…", command=lambda: self._import_theme_zip(listbox)).pack(side="left", padx=4)
+        accent_button(btn_bar, "使用", lambda: self._use_skin(listbox, dialog)).pack(side="left", padx=4)
         tk.Button(btn_bar, text="关闭", command=dialog.destroy).pack(side="left", padx=4)
 
         if listbox.size() > 0:
@@ -409,6 +468,8 @@ class PetApp:
             print("[pet] 新形象已生成（白色去底）")
         else:
             print("[pet] 新形象已导入（原图）")
+        # 生成主题清单：所有状态先回退 pet.png，之后可逐状态替换
+        self._write_theme_json(out_dir, name)
         # 识别人脸位置 -> 装饰品/表情自动适配
         meta = detect_face_meta(out_path)
         if meta:
@@ -416,17 +477,72 @@ class PetApp:
                 json.dump({"face": meta}, f, ensure_ascii=False, indent=2)
             print("[pet] 已识别人脸位置，装饰品/表情会自动适配")
         self._set_skin(os.path.basename(out_dir))
-        listbox.delete(0, "end")
-        for n in self._list_skins():
-            listbox.insert("end", n)
+        if listbox is not None:
+            listbox.delete(0, "end")
+            for n in self._list_skins():
+                listbox.insert("end", n)
         self.say("新形象来了！")
+
+    @staticmethod
+    def _write_theme_json(out_dir, name):
+        manifest = {
+            "name": name,
+            "fallback": "pet.png",
+            "states": {},
+            "说明": "把 happy.png / angry.png / furious.png / celebrate.png / error.png / sleep.png 放进本目录即可单独换该状态的表情。",
+        }
+        with open(os.path.join(out_dir, "theme.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+    def _import_theme_zip(self, listbox=None):
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="选择主题包（zip）",
+            filetypes=[("主题包", "*.zip"), ("所有文件", "*.*")],
+        )
+        if not path:
+            return
+        ok, msg = theme_mod.import_theme_zip(path)
+        if not ok:
+            from tkinter import messagebox
+            messagebox.showerror("导入失败", msg, parent=self.root)
+            return
+        print("[pet]", msg)
+        # 自动切换到新主题
+        skin_name = msg.split(": ")[-1]
+        if listbox is not None:
+            listbox.delete(0, "end")
+            for n in self._list_skins():
+                listbox.insert("end", n)
+        self._set_skin(skin_name)
+        self.say("主题包已导入！")
 
     # ---------- 监督线程 -> 主线程 ----------
     def say(self, text, seconds=4):
         self._queue.put(("say", (text, seconds)))
 
     def set_mood(self, mood):
-        self._queue.put(("mood", (int(max(0, min(4, mood))),)))
+        mood = int(max(0, min(4, mood)))
+        self.mood = mood
+        self.sm.set_mood(mood)
+        self._queue.put(("mood", (mood,)))
+
+    def play_state(self, state, seconds=3.0):
+        """播放瞬时状态（celebrate/error）。"""
+        self._queue.put(("state", (state, float(seconds))))
+
+    def set_sleeping(self, on):
+        self._queue.put(("sleep", (bool(on),)))
+
+    def celebrate(self, text=None, seconds=3.5):
+        if text:
+            self.say(text, max(4, seconds + 0.5))
+        self.play_state("celebrate", seconds)
+
+    def show_error(self, text=None, seconds=3.0):
+        if text:
+            self.say(text, max(4, seconds + 1.0))
+        self.play_state("error", seconds)
 
     def block(self, on):
         self._queue.put(("block", (bool(on),)))
@@ -453,6 +569,11 @@ class PetApp:
                     self._bubble_until = time.time() + seconds
                 elif kind == "mood":
                     self.mood = args[0]
+                elif kind == "state":
+                    state, seconds = args
+                    self.sm.play(state, seconds)
+                elif kind == "sleep":
+                    self.sm.set_sleeping(args[0])
                 elif kind == "block":
                     self._set_block_mode(args[0])
                 elif kind == "pomodoro":
@@ -538,33 +659,46 @@ class PetApp:
         w = c.winfo_width() or NORMAL_SIZE[0]
         h = c.winfo_height() or NORMAL_SIZE[1]
         cx, cy = w / 2.0, h / 2.0
+        state = self.sm.current()
         bob = math.sin(self._t * 2.5) * 4.0
         shake = math.sin(self._t * 40.0) * 3.0 if (self.mood >= 3 or self.block_mode) else 0.0
-        if self.image_skin is not None:
-            self._draw_image(c, cx, cy + bob, shake)
+        # 脚下阴影
+        pet_renderer.draw_shadow(c, cx, cy + bob, 40.0)
+        # 宠物本体（按状态选图；没有图走程序化小猫）
+        img = self._image_for(state)
+        if img is not None:
+            self._draw_image(c, cx, cy + bob, shake, state)
         else:
             lean = self._look_dx * 3 if self._looking else 0.0
             pet_renderer.draw_procedural_pet(
                 c, cx + lean, cy + bob, shake, self.mood, self.level,
                 accessory=self.accessory, t=self._t, show_level=True,
                 look=(self._look_dx, self._look_dy) if self._looking else None)
+        # 状态特效
+        if state == "celebrate":
+            pet_renderer.draw_celebrate_effects(c, cx, cy + bob, self._t)
+        elif state == "error":
+            pet_renderer.draw_error_effects(c, cx, cy + bob, self._t)
+        elif state == "sleep":
+            pet_renderer.draw_sleep_effects(c, cx, cy + bob, self._t)
         self._draw_bubble(c, w, h)
 
-    def _draw_image(self, c, cx, cy, shake):
-        base = self.image_skin
-        if base is None:
-            return
-        iw, ih = base.width(), base.height()
-        w = c.winfo_width() or NORMAL_SIZE[0]
-        h = c.winfo_height() or NORMAL_SIZE[1]
-        if iw > w or ih > h:
-            factor_x = iw // w + (1 if iw % w else 0)
-            factor_y = ih // h + (1 if ih % h else 0)
-            factor = max(1, max(factor_x, factor_y))
-            self._skin_disp = base.subsample(factor, factor)
-        else:
-            self._skin_disp = base
-        disp = self._skin_disp
+    def _draw_image(self, c, cx, cy, shake, state):
+        if state not in self._skin_disp:
+            base = self._image_for(state)
+            if base is None:
+                return
+            iw, ih = base.width(), base.height()
+            w = c.winfo_width() or NORMAL_SIZE[0]
+            h = c.winfo_height() or NORMAL_SIZE[1]
+            if iw > w or ih > h:
+                factor_x = iw // w + (1 if iw % w else 0)
+                factor_y = ih // h + (1 if ih % h else 0)
+                factor = max(1, max(factor_x, factor_y))
+                self._skin_disp[state] = base.subsample(factor, factor)
+            else:
+                self._skin_disp[state] = base
+        disp = self._skin_disp[state]
         dw, dh = disp.width(), disp.height()
         c.create_image(cx + shake, cy, image=disp)
 
@@ -582,97 +716,21 @@ class PetApp:
             if self.mood >= 1:
                 pet_renderer.draw_expression_overlay(c, hx, hy, hr, self.mood)
 
-    def _draw_procedural(self, c, cx, cy, shake):
-        s = 1.0 + min(0.4, (self.level - 1) * 0.08)
-        angry = self.mood >= 3
-        body = BODY_ANGRY if angry else BODY_NORMAL
-        outline = OUTLINE_ANGRY if angry else OUTLINE_NORMAL
-        if self.level >= 6:
-            outline = OUTLINE_GOLD
-
-        # 耳朵
-        ear_l = [(cx - 30 * s + shake, cy - 34 * s),
-                 (cx - 18 * s + shake, cy - 52 * s),
-                 (cx - 6 * s + shake, cy - 32 * s)]
-        ear_r = [(cx + 6 * s + shake, cy - 32 * s),
-                 (cx + 18 * s + shake, cy - 52 * s),
-                 (cx + 30 * s + shake, cy - 34 * s)]
-        c.create_polygon(ear_l, fill=body, outline=outline, width=2)
-        c.create_polygon(ear_r, fill=body, outline=outline, width=2)
-
-        # 身体
-        c.create_oval(cx - 40 * s + shake, cy - 40 * s, cx + 40 * s + shake, cy + 40 * s,
-                      fill=body, outline=outline, width=3)
-
-        # 腮红
-        if self.mood >= 1:
-            blush = "#ff8080" if self.mood >= 3 else BLUSH
-            c.create_oval(cx - 34 * s + shake, cy + 6 * s, cx - 22 * s + shake, cy + 16 * s,
-                          fill=blush, outline="")
-            c.create_oval(cx + 22 * s + shake, cy + 6 * s, cx + 34 * s + shake, cy + 16 * s,
-                          fill=blush, outline="")
-
-        # 眼睛（眨眼）
-        blinking = (self._t % self._blink_period) < 0.18
-        eye_y = cy - 10 * s
-        if blinking:
-            c.create_line(cx - 16 * s + shake, eye_y, cx - 8 * s + shake, eye_y, fill="#4a3728", width=2)
-            c.create_line(cx + 8 * s + shake, eye_y, cx + 16 * s + shake, eye_y, fill="#4a3728", width=2)
-        else:
-            c.create_oval(cx - 17 * s + shake, eye_y - 6 * s, cx - 7 * s + shake, eye_y + 6 * s,
-                          fill="#4a3728", outline="")
-            c.create_oval(cx + 7 * s + shake, eye_y - 6 * s, cx + 17 * s + shake, eye_y + 6 * s,
-                          fill="#4a3728", outline="")
-
-        # 眉毛（不耐烦/生气）
-        if self.mood >= 2:
-            c.create_line(cx - 18 * s + shake, eye_y - 12 * s, cx - 6 * s + shake, eye_y - 8 * s,
-                          fill="#4a3728", width=2)
-            c.create_line(cx + 6 * s + shake, eye_y - 8 * s, cx + 18 * s + shake, eye_y - 12 * s,
-                          fill="#4a3728", width=2)
-
-        # 嘴
-        mouth_y = cy + 10 * s
-        if self.mood == 0:      # 开心：微笑
-            c.create_arc(cx - 12 * s + shake, mouth_y - 8 * s, cx + 12 * s + shake, mouth_y + 12 * s,
-                         start=180, extent=180, style="arc", outline="#4a3728", width=2)
-        elif self.mood == 1:    # 好奇：小 O
-            c.create_oval(cx - 3 * s + shake, mouth_y - 3 * s, cx + 3 * s + shake, mouth_y + 3 * s,
-                          fill="#4a3728", outline="")
-        elif self.mood == 2:    # 不耐烦：直线
-            c.create_line(cx - 8 * s + shake, mouth_y, cx + 8 * s + shake, mouth_y,
-                          fill="#4a3728", width=2)
-        else:                   # 生气/暴怒：倒弧 + 咬牙
-            c.create_arc(cx - 12 * s + shake, mouth_y - 4 * s, cx + 12 * s + shake, mouth_y + 12 * s,
-                         start=0, extent=180, style="arc", outline="#4a3728", width=2)
-            if self.mood >= 4:
-                for dx in (-5 * s, 0, 5 * s):
-                    c.create_line(cx + dx + shake, mouth_y + 4 * s, cx + dx + shake, mouth_y + 9 * s,
-                                  fill="#4a3728", width=1)
-
-        # 皇冠（Lv>=4）
-        if self.level >= 4:
-            top = cy - 52 * s
-            pts = [(cx - 14 * s + shake, top), (cx - 9 * s + shake, top - 14 * s),
-                   (cx - 4 * s + shake, top - 6 * s), (cx + 4 * s + shake, top - 6 * s),
-                   (cx + 9 * s + shake, top - 14 * s), (cx + 14 * s + shake, top),
-                   (cx - 14 * s + shake, top)]
-            c.create_polygon(pts, fill="#ffd700", outline="#c9a400", width=1)
-
-        # 等级角标
-        c.create_text(cx + shake, cy + 40 * s + 14, text=f"Lv.{self.level}",
-                      fill="#777777", font=("Microsoft YaHei UI", 8))
-
     def _draw_bubble(self, c, w, h):
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
-        bx, by, bw, bh = 8, 8, w - 16, 46
-        c.create_oval(bx, by, bx + 14, by + 14, fill="white", outline="#888888")
-        c.create_oval(bx + bw - 14, by, bx + bw, by + 14, fill="white", outline="#888888")
-        c.create_oval(bx, by + bh - 14, bx + 14, by + bh, fill="white", outline="#888888")
-        c.create_oval(bx + bw - 14, by + bh - 14, bx + bw, by + bh, fill="white", outline="#888888")
-        c.create_rectangle(bx + 7, by, bx + bw - 7, by + bh, fill="white", outline="#888888")
-        c.create_rectangle(bx, by + 7, bx + bw, by + bh - 7, fill="white", outline="#888888")
+        bx, by, bw, bh = 8, 8, min(w - 16, 220), 46
+        r = 10
+        # 圆角气泡
+        c.create_oval(bx, by, bx + 2 * r, by + 2 * r, fill="white", outline="#dddddd")
+        c.create_oval(bx + bw - 2 * r, by, bx + bw, by + 2 * r, fill="white", outline="#dddddd")
+        c.create_oval(bx, by + bh - 2 * r, bx + 2 * r, by + bh, fill="white", outline="#dddddd")
+        c.create_oval(bx + bw - 2 * r, by + bh - 2 * r, bx + bw, by + bh, fill="white", outline="#dddddd")
+        c.create_rectangle(bx + r, by, bx + bw - r, by + bh, fill="white", outline="#dddddd")
+        c.create_rectangle(bx, by + r, bx + bw, by + bh - r, fill="white", outline="#dddddd")
+        # 小尾巴
+        c.create_polygon(bx + 24, by + bh - 2, bx + 34, by + bh + 10,
+                         bx + 44, by + bh - 2, fill="white", outline="")
         c.create_text(bx + bw / 2, by + bh / 2, text=text, width=bw - 16,
                       fill="#333333", font=("Microsoft YaHei UI", 9))

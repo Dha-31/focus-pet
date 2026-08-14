@@ -1,4 +1,4 @@
-﻿"""core/theme.py：主题资源包系统（v3.5，借鉴 clawd-on-desk 的 theme.json 设计思想，独立实现）。
+"""core/theme.py：主题资源包系统（v3.5，借鉴 clawd-on-desk 的 theme.json 设计思想，独立实现）。
 
 皮肤目录 skins/<名字>/：
   theme.json      可选清单：{"name","fallback","states":{状态:文件},"face":{cx,cy,r}}
@@ -17,8 +17,10 @@ import shutil
 import tempfile
 import zipfile
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from . import paths as _paths
+PROJECT_ROOT = _paths.user_data_dir()
 SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
+os.makedirs(SKINS_DIR, exist_ok=True)
 
 # 全部状态槽位（按"严重程度/情绪"排列，idle 是通用兜底）
 THEME_STATES = [

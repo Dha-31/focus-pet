@@ -16,9 +16,12 @@ import os
 import shutil
 import sys
 
+import sys as _sys
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
-CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
+if PROJECT_ROOT not in _sys.path:
+    _sys.path.insert(0, PROJECT_ROOT)
+from core.theme import SKINS_DIR  # noqa: E402
+from core.config import CONFIG_PATH  # noqa: E402
 
 try:
     from PIL import Image

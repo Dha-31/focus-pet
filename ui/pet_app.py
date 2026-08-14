@@ -24,15 +24,13 @@ from tkinter import filedialog, simpledialog
 
 from core import sounds
 from core import theme as theme_mod
+from core.config import CONFIG_PATH
+from core.theme import SKINS_DIR
 from core.economy import Inventory
 from core.state_machine import PetStateMachine
 from ui import pet_renderer
 from ui.theme_ui import accent_button, add_header
 from ui.skin_face import detect_face_meta
-
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKINS_DIR = os.path.join(PROJECT_ROOT, "skins")
-CONFIG_PATH = os.path.join(PROJECT_ROOT, "data", "config.json")
 
 TRANSPARENT_BG = "#010203"
 DESIGN_SIZE = 170          # 猫画稿的设计基准（窗口 170 时猫占满；窗口变大猫等比放大，矢量不糊）
@@ -83,16 +81,9 @@ class PetApp:
         self.normal_size = tuple(int(v * self._dpi) for v in NORMAL_SIZE)
         self.mini_size = tuple(int(v * self._dpi) for v in MINI_SIZE)
         self.block_size = tuple(int(v * self._dpi) for v in BLOCK_SIZE)
-        # 用户自定义大小（调整大小窗口写入），缺省 = 默认尺寸
+        # 用户自定义大小（调整大小窗口写入），缺省 = 默认尺寸；
+        # 读取必须放在 self.root 创建之后（用到 winfo_screenwidth）
         self.pet_size = self.normal_size
-        try:
-            _ps = config.get("pet", {}).get("pet_size")
-            if isinstance(_ps, (list, tuple)) and len(_ps) == 2:
-                _w = max(self.mini_size[0], min(int(_ps[0]), self.root.winfo_screenwidth()))
-                _h = max(self.mini_size[1], min(int(_ps[1]), self.root.winfo_screenheight()))
-                self.pet_size = (_w, _h)
-        except Exception:
-            pass
         self.dnd = bool(config.get("dnd", {}).get("enabled", False))      # 免打扰
         self.mini = bool(config.get("pet", {}).get("mini_mode", False))   # 迷你模式
         self._activity = "idle"          # study / distraction / idle（活动驱动动画）
@@ -122,6 +113,15 @@ class PetApp:
         try:
             self.root.attributes("-transparentcolor", TRANSPARENT_BG)
         except tk.TclError:
+            pass
+        # 恢复用户上次调整的桌宠大小（放在 root 创建之后才能查屏幕尺寸）
+        try:
+            _ps = config.get("pet", {}).get("pet_size")
+            if isinstance(_ps, (list, tuple)) and len(_ps) == 2:
+                _w = max(self.mini_size[0], min(int(_ps[0]), self.root.winfo_screenwidth()))
+                _h = max(self.mini_size[1], min(int(_ps[1]), self.root.winfo_screenheight()))
+                self.pet_size = (_w, _h)
+        except Exception:
             pass
 
         # 位置记忆：从配置恢复上次位置
@@ -836,8 +836,6 @@ class PetApp:
                 jump = -abs(math.sin(math.pi * prog)) * 6
         cx += sway + pacing
         cy += jump
-        # 脚下阴影
-        pet_renderer.draw_shadow(c, cx, cy + bob, 40.0 * view_scale)
         # 宠物本体（按状态选图；没有图走程序化小猫）
         img = self._image_for(state)
         if img is not None:

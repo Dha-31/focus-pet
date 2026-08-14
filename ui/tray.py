@@ -14,8 +14,8 @@ import struct
 import sys
 from ctypes import wintypes
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ICON_PATH = os.path.join(PROJECT_ROOT, "data", "pet_icon.ico")
+from core.config import DATA_DIR
+ICON_PATH = os.path.join(DATA_DIR, "pet_icon.ico")
 
 WM_APP = 0x8000
 WM_DESTROY = 0x0002

@@ -3,7 +3,9 @@ import copy
 import json
 import os
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+from . import paths as _paths
+DATA_DIR = os.path.join(_paths.user_data_dir(), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 
 DEFAULTS = {

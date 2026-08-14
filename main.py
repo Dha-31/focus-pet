@@ -408,6 +408,11 @@ def run_app():
                 hotkeys_mgr.register(0x0001 | 0x0002, 0x53, _hk_study)   # Ctrl+Alt+S
                 hotkeys_mgr.register(0x0001 | 0x0002, 0x48, _hk_toggle)  # Ctrl+Alt+H
                 hotkeys_mgr.register(0x0001 | 0x0002, 0x4D, _hk_mini)    # Ctrl+Alt+M
+                # 同步登记到帮助数据源（帮助中心自动展示，保证不过期）
+                from core.help_data import register_hotkey as _reg_hk
+                _reg_hk("Ctrl+Alt+S", "开始/结束学习")
+                _reg_hk("Ctrl+Alt+H", "显示/隐藏桌宠")
+                _reg_hk("Ctrl+Alt+M", "迷你模式")
                 print("[hotkeys] 全局快捷键已启用：Ctrl+Alt+S 学习 / Ctrl+Alt+H 显隐 / Ctrl+Alt+M 迷你")
             else:
                 hotkeys_mgr = None

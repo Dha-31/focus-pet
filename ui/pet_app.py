@@ -836,17 +836,20 @@ class PetApp:
                 jump = -abs(math.sin(math.pi * prog)) * 6
         cx += sway + pacing
         cy += jump
-        # 宠物本体（按状态选图；没有图走程序化小猫）
+        # 宠物本体（记录"脑袋"位置，气泡贴脑袋右边）
+        head = None
         img = self._image_for(state)
         if img is not None:
-            self._draw_image(c, cx, cy + bob, shake, state)
+            head = self._draw_image(c, cx, cy + bob, shake, state)
         else:
             lean = self._look_dx * 3 if self._looking else 0.0
+            s_eff = view_scale * (1.0 + min(0.4, (self.level - 1) * 0.08))
             pet_renderer.draw_procedural_pet(
                 c, cx + lean, cy + bob, shake, self.mood, self.level,
                 accessory=self.accessory, t=self._t, show_level=not self.mini,
                 look=(self._look_dx, self._look_dy) if self._looking else None,
                 view_scale=view_scale, napping=napping)
+            head = (cx + lean, cy + bob - 14 * s_eff, 26 * s_eff)
         # 状态特效（随迷你模式一起缩小）
         if state == "celebrate":
             pet_renderer.draw_celebrate_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
@@ -855,7 +858,7 @@ class PetApp:
         elif state == "sleep":
             pet_renderer.draw_sleep_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
         if not self.mini:
-            self._draw_bubble(c, w, h)
+            self._draw_bubble(c, w, h, head, view_scale)
 
     def _draw_image(self, c, cx, cy, shake, state):
         w = c.winfo_width() or self.normal_size[0]
@@ -864,33 +867,52 @@ class PetApp:
         if key not in self._skin_disp:
             base = self._image_for(state)
             if base is None:
-                return
+                return None
             disp = pet_renderer.fit_photo(base, w * 0.9, h * 0.9)
             self._skin_disp[key] = disp
         disp = self._skin_disp[key]
         dw, dh = disp.width(), disp.height()
         c.create_image(cx + shake, cy, image=disp)
 
-        # 装饰品/表情自动适配（依据人脸元数据）
-        if self.accessory or self.mood >= 1:
-            meta = self.skin_face
-            if meta:
-                hx = cx + shake - dw / 2 + meta["cx"] * dw
-                hy = cy - dh / 2 + meta["cy"] * dh
-                hr = max(8, meta["r"] * dw)
-            else:
-                hx, hy, hr = cx + shake, cy - dh * 0.35, max(8, dw * 0.18)
-            if self.accessory:
-                pet_renderer.draw_accessory(c, hx, hy, hr, self.accessory)
-            if self.mood >= 1:
-                pet_renderer.draw_expression_overlay(c, hx, hy, hr, self.mood)
+        # 脑袋位置（气泡贴在脑袋右边 + 装饰品/表情自动适配）
+        meta = self.skin_face
+        if meta:
+            hx = cx + shake - dw / 2 + meta["cx"] * dw
+            hy = cy - dh / 2 + meta["cy"] * dh
+            hr = max(8, meta["r"] * dw)
+        else:
+            hx, hy, hr = cx + shake, cy - dh * 0.35, max(8, dw * 0.18)
+        if self.accessory:
+            pet_renderer.draw_accessory(c, hx, hy, hr, self.accessory)
+        if self.mood >= 1:
+            pet_renderer.draw_expression_overlay(c, hx, hy, hr, self.mood)
+        return (hx, hy, hr)
 
-    def _draw_bubble(self, c, w, h):
+    def _draw_bubble(self, c, w, h, head=None, view_scale=1.0):
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
-        bx, by, bw, bh = 8, 8, min(w - 16, 220), 46
-        r = 10
+        scale = max(0.6, min(2.5, view_scale))
+        bw = int(min(320, 240 * scale))
+        bh = int(44 * scale)
+        font_size = max(8, min(18, int(9 * scale)))
+        # 锚点：默认右上，有脑袋则贴在脑袋右边
+        if head:
+            hx, hy, hr = head
+            bx = hx + hr + 10
+            by = hy - bh * 0.85
+        else:
+            bx, by = 10, 10
+        # 放不下就放到脑袋左边；再 clamp 到窗口内
+        if bx + bw > w - 4:
+            bx = (hx - hr - bw - 10) if head else (w - bw - 4)
+        if bx < 4:
+            bx = 4
+        if by < 4:
+            by = 4
+        if by + bh > h - 4:
+            by = h - bh - 4
+        r = max(6, int(10 * scale))
         # 圆角气泡
         c.create_oval(bx, by, bx + 2 * r, by + 2 * r, fill="white", outline="#dddddd")
         c.create_oval(bx + bw - 2 * r, by, bx + bw, by + 2 * r, fill="white", outline="#dddddd")
@@ -898,10 +920,14 @@ class PetApp:
         c.create_oval(bx + bw - 2 * r, by + bh - 2 * r, bx + bw, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx + r, by, bx + bw - r, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx, by + r, bx + bw, by + bh - r, fill="white", outline="#dddddd")
-        # 小尾巴
-        c.create_polygon(bx + 24, by + bh - 2, bx + 34, by + bh + 10,
-                         bx + 44, by + bh - 2, fill="white", outline="")
-        c.create_text(bx + bw / 2, by + bh / 2, text=text, width=bw - 16,
-                      fill="#333333", font=("Microsoft YaHei UI", 9))
+        # 小尾巴（朝角色方向）
+        if head and bx > hx:
+            c.create_polygon(bx + 8, by + bh - 2, bx + 16, by + bh + 10,
+                             bx + 26, by + bh - 2, fill="white", outline="")
+        else:
+            c.create_polygon(bx + bw - 26, by + bh - 2, bx + bw - 16, by + bh + 10,
+                             bx + bw - 8, by + bh - 2, fill="white", outline="")
+        c.create_text(bx + bw / 2, by + bh / 2, text=text, width=max(60, bw - 16),
+                      fill="#333333", font=("Microsoft YaHei UI", font_size))
 
 

@@ -893,17 +893,29 @@ class PetApp:
             return
         text = self.bubble_text
         scale = max(0.6, min(2.5, view_scale))
-        bw = int(min(320, 240 * scale))
-        bh = int(44 * scale)
-        font_size = max(8, min(18, int(9 * scale)))
-        # 锚点：默认右上，有脑袋则贴在脑袋右边
+        font_size = max(8, min(20, int(9 * scale)))
+        # 先量文字：按内宽换行，算行数和实际需要的高度，保证字不超出气泡
+        try:
+            from tkinter import font as tkfont
+            _f = tkfont.Font(family="Microsoft YaHei UI", size=font_size)
+            bw = int(min(360, 260 * scale))
+            if bw > w - 16:
+                bw = w - 16
+            inner_w = max(60, bw - 20)
+            line_h = _f.metrics("linespace")
+            lines = max(1, int((_f.measure(text) + inner_w - 1) // inner_w))
+            bh = lines * line_h + int(12 * scale)
+        except Exception:
+            bw = int(min(320, 240 * scale))
+            bh = int(54 * scale)
+        # 锚点：有脑袋则贴在脑袋右边，否则右上角
         if head:
             hx, hy, hr = head
             bx = hx + hr + 10
-            by = hy - bh * 0.85
+            by = hy - bh * 0.8
         else:
             bx, by = 10, 10
-        # 放不下就放到脑袋左边；再 clamp 到窗口内
+        # 放不下就放脑袋左边；再 clamp 到窗口内
         if bx + bw > w - 4:
             bx = (hx - hr - bw - 10) if head else (w - bw - 4)
         if bx < 4:
@@ -927,7 +939,5 @@ class PetApp:
         else:
             c.create_polygon(bx + bw - 26, by + bh - 2, bx + bw - 16, by + bh + 10,
                              bx + bw - 8, by + bh - 2, fill="white", outline="")
-        c.create_text(bx + bw / 2, by + bh / 2, text=text, width=max(60, bw - 16),
+        c.create_text(bx + bw / 2, by + bh / 2, text=text, width=inner_w,
                       fill="#333333", font=("Microsoft YaHei UI", font_size))
-
-

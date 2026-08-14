@@ -123,6 +123,7 @@ CONFIG_SCHEMA = [
     {"path": "lock.exit_code", "file": "config", "category": "锁定", "label": "退出码", "type": "str"},
     {"path": "pet.skin", "file": "config", "category": "形象", "label": "当前皮肤", "type": "str"},
     {"path": "pet.mini_mode", "file": "config", "category": "形象", "label": "迷你模式", "type": "bool", "desc": "桌宠缩成小形态，不挡桌面"},
+    {"path": "pet.pet_size", "file": "config", "category": "形象", "label": "桌宠大小(宽,高)", "type": "list", "desc": "调整大小窗口会写这里，一般不手改"},
     {"path": "dnd.enabled", "file": "config", "category": "免打扰", "label": "免打扰模式", "type": "bool", "desc": "宠物闭嘴静音，监督照常（仍会检测/记录）"},
     {"path": "sound.enabled", "file": "config", "category": "音效", "label": "提示音效", "type": "bool", "desc": "完成/提醒/出错时的提示音（免打扰时自动静音）"},
     {"path": "hotkeys.enabled", "file": "config", "category": "快捷键", "label": "全局快捷键", "type": "bool", "desc": "Ctrl+Alt+S 开始/结束学习，Ctrl+Alt+H 显示/隐藏，Ctrl+Alt+M 迷你模式"},

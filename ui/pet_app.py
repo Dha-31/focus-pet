@@ -82,6 +82,16 @@ class PetApp:
         self.normal_size = tuple(int(v * self._dpi) for v in NORMAL_SIZE)
         self.mini_size = tuple(int(v * self._dpi) for v in MINI_SIZE)
         self.block_size = tuple(int(v * self._dpi) for v in BLOCK_SIZE)
+        # 用户自定义大小（调整大小窗口写入），缺省 = 默认尺寸
+        self.pet_size = self.normal_size
+        try:
+            _ps = config.get("pet", {}).get("pet_size")
+            if isinstance(_ps, (list, tuple)) and len(_ps) == 2:
+                _w = max(self.mini_size[0], min(int(_ps[0]), self.root.winfo_screenwidth()))
+                _h = max(self.mini_size[1], min(int(_ps[1]), self.root.winfo_screenheight()))
+                self.pet_size = (_w, _h)
+        except Exception:
+            pass
         self.dnd = bool(config.get("dnd", {}).get("enabled", False))      # 免打扰
         self.mini = bool(config.get("pet", {}).get("mini_mode", False))   # 迷你模式
         self._activity = "idle"          # study / distraction / idle（活动驱动动画）
@@ -122,7 +132,7 @@ class PetApp:
                 self._normal_pos = (int(_wx), int(_wy))
         except Exception:
             pass
-        self._set_geometry(self.normal_size)
+        self._set_geometry(self.pet_size)
         if self.mini:
             self._set_geometry(self.mini_size)
 
@@ -217,7 +227,7 @@ class PetApp:
             x = sw - w - 40
             y = sh - h - 120
         self.root.geometry(f"{w}x{h}+{x}+{y}")
-        if size == self.normal_size:
+        if size == self.pet_size:
             self._normal_pos = (x, y)
 
     def _save_position(self):
@@ -231,8 +241,18 @@ class PetApp:
             cfg = {}
         cfg.setdefault("pet", {})["window_x"] = int(self._normal_pos[0])
         cfg.setdefault("pet", {})["window_y"] = int(self._normal_pos[1])
+        cfg.setdefault("pet", {})["pet_size"] = [int(self.pet_size[0]), int(self.pet_size[1])]
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+    def set_pet_size(self, w, h):
+        """应用调整大小窗口选定的尺寸（迷你模式保持锁定小尺寸）。"""
+        w = max(self.mini_size[0], min(int(w), self.root.winfo_screenwidth()))
+        h = max(self.mini_size[1], min(int(h), self.root.winfo_screenheight()))
+        self.pet_size = (w, h)
+        if not self.mini:
+            self._set_geometry(self.pet_size)
+        self._save_position()
 
     def _center_for_block(self):
         w, h = self.block_size
@@ -265,89 +285,23 @@ class PetApp:
             self.show()
 
     # ---------- 拖拽 ----------
-    RESIZE_EDGE = 8
-    _CURSORS = {"nw": "size_nw_se", "ne": "size_ne_sw", "sw": "size_ne_sw",
-                "se": "size_nw_se", "n": "size_ns", "s": "size_ns",
-                "w": "size_we", "e": "size_we"}
-
     def _setup_drag(self):
-        # 边缘 = 缩放；中间 = 移动。迷你模式锁定尺寸，不响应缩放。
-        self.canvas.bind("<Motion>", self._resize_hover)
-        self.canvas.bind("<ButtonPress-1>", self._press)
-        self.canvas.bind("<B1-Motion>", self._move)
-        self.canvas.bind("<ButtonRelease-1>", self._release)
+        # 普通拖拽移动（大小调整请用右键 → 形象 → 调整大小…）
+        self.canvas.bind("<ButtonPress-1>", self._drag_start)
+        self.canvas.bind("<B1-Motion>", self._drag_move)
+        self.canvas.bind("<ButtonRelease-1>", self._drag_end)
 
-    def _edge_at(self, x, y):
-        w = self.canvas.winfo_width() or 0
-        h = self.canvas.winfo_height() or 0
-        if w < 20 or h < 20:          # 窗口还没映射/绘制完成时用默认尺寸兜底
-            w, h = self.normal_size
-        e = self.RESIZE_EDGE
-        left, right = x <= e, x >= w - e
-        top, bottom = y <= e, y >= h - e
-        if top and left: return "nw"
-        if top and right: return "ne"
-        if bottom and left: return "sw"
-        if bottom and right: return "se"
-        if top: return "n"
-        if bottom: return "s"
-        if left: return "w"
-        if right: return "e"
-        return None
+    def _drag_start(self, event):
+        self._drag = (event.x_root, event.y_root, self.root.winfo_x(), self.root.winfo_y())
 
-    def _resize_hover(self, event):
-        if self.mini or self.block_mode:
-            self.canvas.configure(cursor="")
-            return
-        edge = self._edge_at(event.x, event.y)
-        if edge:
-            self.canvas.configure(cursor=self._CURSORS[edge])
-        else:
-            self.canvas.configure(cursor="fleur")
-
-    def _press(self, event):
-        if self.mini or self.block_mode:
-            return
-        edge = self._edge_at(event.x, event.y)
-        if edge:
-            self._resizing = (edge, event.x_root, event.y_root,
-                              self.root.winfo_x(), self.root.winfo_y(),
-                              self.root.winfo_width(), self.root.winfo_height())
-            self._drag = None
-        else:
-            self._drag = (event.x_root, event.y_root,
-                          self.root.winfo_x(), self.root.winfo_y())
-            self._resizing = None
-
-    def _move(self, event):
-        if self.mini or self.block_mode:
-            return
-        if getattr(self, "_resizing", None):
-            edge, rx, ry, wx, wy, ww, wh = self._resizing
-            dx = event.x_root - rx
-            dy = event.y_root - ry
-            minw, minh = self.mini_size
-            maxw = max(minw, self.root.winfo_screenwidth())
-            maxh = max(minh, self.root.winfo_screenheight())
-            new_w, new_h, nx, ny = ww, wh, wx, wy
-            if "e" in edge: new_w = ww + dx
-            if "s" in edge: new_h = wh + dy
-            if "w" in edge: new_w = ww - dx
-            if "n" in edge: new_h = wh - dy
-            new_w = max(minw, min(new_w, maxw))
-            new_h = max(minh, min(new_h, maxh))
-            if "w" in edge: nx = wx + (ww - new_w)
-            if "n" in edge: ny = wy + (wh - new_h)
-            self.root.geometry(f"{new_w}x{new_h}+{nx}+{ny}")
-            return
-        if not self._drag:
+    def _drag_move(self, event):
+        if not self._drag or self.block_mode:
             return
         rx, ry, wx, wy = self._drag
         self.root.geometry(f"+{wx + event.x_root - rx}+{wy + event.y_root - ry}")
 
-    def _release(self, event):
+    def _drag_end(self, event):
         self._drag = None
-        self._resizing = None
         self._normal_pos = (self.root.winfo_x(), self.root.winfo_y())
         self._save_position()   # 位置记忆
 
@@ -392,6 +346,7 @@ class PetApp:
         look_menu.add_command(label="更换形象…", command=self._open_skin_dialog)
         look_menu.add_command(label="导入主题包…", command=self._import_theme_zip)
         look_menu.add_command(label="还原初始形象（小猫）", command=lambda: self._set_skin("default"))
+        look_menu.add_command(label="调整大小…", command=self._open_size_dialog)
         menu.add_cascade(label="形象", menu=look_menu)
         # 娱乐
         fun_menu = tk.Menu(menu, tearoff=0)
@@ -487,6 +442,10 @@ class PetApp:
         from ui.space_window import SpaceWindow
         self._space_win = SpaceWindow(self.root, self.inventory, self)
         window_manager.open(self._space_win.root)
+
+    def _open_size_dialog(self):
+        from ui.size_dialog import SizeDialog
+        SizeDialog(self)
 
     def equip_accessory(self, aid):
         self.accessory = aid
@@ -764,13 +723,13 @@ class PetApp:
             if not self.dnd:            # 免打扰：不放大遮挡，监督照常
                 self._center_for_block()
         else:
-            self._set_geometry(self.mini_size if self.mini else self.normal_size)
+            self._set_geometry(self.mini_size if self.mini else self.pet_size)
 
     def _set_mini_mode(self, on):
         if on == self.mini:
             return
         self.mini = bool(on)
-        self._set_geometry(self.mini_size if on else self.normal_size)
+        self._set_geometry(self.mini_size if on else self.pet_size)
         self._build_menu()   # 勾选状态刷新
 
     # ---------- 动画 ----------

@@ -79,8 +79,8 @@ class ReportWindow:
     def __init__(self, parent):
         self.root = tk.Toplevel(parent)
         self.root.title("专注数据报表")
-        self.root.geometry("600x660")
-        self.root.transient(parent)
+        self.root.geometry("640x720")
+        self.root.resizable(False, False)
         style_window(self.root)
         self._build()
 

@@ -13,8 +13,8 @@ class ShopWindow:
         self.on_place = on_place or (lambda fid: None)
         self.root = tk.Toplevel(parent)
         self.root.title("商店 - 专注币兑换")
-        self.root.geometry("480x460")
-        self.root.transient(parent)
+        self.root.geometry("520x520")
+        self.root.resizable(False, False)
         style_window(self.root)
         self._items = {}
         self._build()

@@ -14,7 +14,7 @@
 import os
 
 APP_NAME = "Focus Pet"
-VERSION = "3.7"          # 当前版本号（每次发版更新这里）
+VERSION = "3.7.1"          # 当前版本号（每次发版更新这里）
 DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs")
 
 # 功能条目（v3.7 帮助中心渲染用；随版本增补）

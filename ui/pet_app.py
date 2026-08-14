@@ -73,6 +73,15 @@ class PetApp:
         self.closed = False
         self.tray_enabled = bool(tray_enabled)
         self.on_skin_changed = None      # 换皮肤后的回调（main.py 用它更新托盘图标）
+        # DPI 缩放：开启 DPI 感知后 170px 是真像素，按系统缩放比例放大回原视觉大小
+        try:
+            _dpi = self.root.winfo_fpixels("1i") / 96.0
+        except Exception:
+            _dpi = 1.0
+        self._dpi = max(1.0, min(2.5, _dpi))
+        self.normal_size = tuple(int(v * self._dpi) for v in NORMAL_SIZE)
+        self.mini_size = tuple(int(v * self._dpi) for v in MINI_SIZE)
+        self.block_size = tuple(int(v * self._dpi) for v in BLOCK_SIZE)
         self.dnd = bool(config.get("dnd", {}).get("enabled", False))      # 免打扰
         self.mini = bool(config.get("pet", {}).get("mini_mode", False))   # 迷你模式
         self._activity = "idle"          # study / distraction / idle（活动驱动动画）
@@ -113,9 +122,9 @@ class PetApp:
                 self._normal_pos = (int(_wx), int(_wy))
         except Exception:
             pass
-        self._set_geometry(NORMAL_SIZE)
+        self._set_geometry(self.normal_size)
         if self.mini:
-            self._set_geometry(MINI_SIZE)
+            self._set_geometry(self.mini_size)
 
         self.canvas = tk.Canvas(self.root, bg=TRANSPARENT_BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
@@ -208,7 +217,7 @@ class PetApp:
             x = sw - w - 40
             y = sh - h - 120
         self.root.geometry(f"{w}x{h}+{x}+{y}")
-        if size == NORMAL_SIZE:
+        if size == self.normal_size:
             self._normal_pos = (x, y)
 
     def _save_position(self):
@@ -226,7 +235,7 @@ class PetApp:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
 
     def _center_for_block(self):
-        w, h = BLOCK_SIZE
+        w, h = self.block_size
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         self.root.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
@@ -430,19 +439,27 @@ class PetApp:
         from ui import window_manager
         dialog = tk.Toplevel(self.root)
         dialog.title("更换形象")
-        dialog.geometry("360x500")
-        dialog.transient(self.root)
+        dialog.geometry("380x540")
+        dialog.resizable(False, False)
         window_manager.open(dialog)
 
-        add_header(dialog, "更换形象", "选一个形象，或导入你自己的图片 / 主题包").pack(padx=14, pady=(10, 0), anchor="w")
-        tk.Label(dialog, text="💡 主题包 = 一个 zip，里面能放多张状态图（生气/庆祝/睡觉…），"
-                              "比单张图更生动；可用 tools/theme_scaffold.py 生成。",
-                 fg="#888", font=("Microsoft YaHei UI", 8), wraplength=320, justify="left").pack(padx=14, anchor="w")
+        add_header(dialog, "更换形象", "换一张照片 / 换一个主题包，或直接选下面的形象").pack(padx=14, pady=(10, 0), anchor="w")
+        # 醒目的大导入按钮（用户反馈找不到导入入口；暂不支持拖拽）
+        from ui.theme_ui import accent_button as _accent
+        tk.Button(dialog, text="📷 导入你自己的照片…", command=lambda: self._import_skin(listbox),
+                  bg="#5bc0de", fg="white", activebackground="#31b0d5", activeforeground="white",
+                  relief="flat", bd=0, padx=12, pady=8, cursor="hand2",
+                  font=("Microsoft YaHei UI", 11, "bold")).pack(padx=14, pady=(8, 0), fill="x")
+        tk.Label(dialog, text="（暂不支持拖拽，请点上面按钮选择图片；自动抠图去底，一张图即可用）",
+                 fg="#888", font=("Microsoft YaHei UI", 8)).pack(padx=14, anchor="w")
+        tk.Label(dialog, text="💡 主题包 = 一个 zip，可放多张状态图（生气/庆祝/睡觉…），更生动；"
+                              "可用 tools/theme_scaffold.py 生成。",
+                 fg="#888", font=("Microsoft YaHei UI", 8), wraplength=340, justify="left").pack(padx=14, anchor="w")
 
         self._skin_preview = tk.Label(dialog, bg="#f0f0f0", width=160, height=120)
         self._skin_preview.pack(pady=4)
 
-        listbox = tk.Listbox(dialog, width=30, height=8, font=("Microsoft YaHei UI", 10))
+        listbox = tk.Listbox(dialog, width=32, height=8, font=("Microsoft YaHei UI", 10))
         listbox.pack(padx=10, pady=4, fill="both", expand=True)
         for name in self._list_skins():
             listbox.insert("end", name)
@@ -458,7 +475,6 @@ class PetApp:
 
         btn_bar = tk.Frame(dialog)
         btn_bar.pack(pady=6)
-        tk.Button(btn_bar, text="导入新图片…", command=lambda: self._import_skin(listbox)).pack(side="left", padx=4)
         tk.Button(btn_bar, text="导入主题包…", command=lambda: self._import_theme_zip(listbox)).pack(side="left", padx=4)
         accent_button(btn_bar, "使用", lambda: self._use_skin(listbox, dialog)).pack(side="left", padx=4)
         tk.Button(btn_bar, text="关闭", command=dialog.destroy).pack(side="left", padx=4)
@@ -683,13 +699,13 @@ class PetApp:
             if not self.dnd:            # 免打扰：不放大遮挡，监督照常
                 self._center_for_block()
         else:
-            self._set_geometry(MINI_SIZE if self.mini else NORMAL_SIZE)
+            self._set_geometry(self.mini_size if self.mini else self.normal_size)
 
     def _set_mini_mode(self, on):
         if on == self.mini:
             return
         self.mini = bool(on)
-        self._set_geometry(MINI_SIZE if on else NORMAL_SIZE)
+        self._set_geometry(self.mini_size if on else self.normal_size)
         self._build_menu()   # 勾选状态刷新
 
     # ---------- 动画 ----------
@@ -737,8 +753,8 @@ class PetApp:
             return
         wx = self.root.winfo_x()
         wy = self.root.winfo_y()
-        cw = self.canvas.winfo_width() or NORMAL_SIZE[0]
-        ch = self.canvas.winfo_height() or NORMAL_SIZE[1]
+        cw = self.canvas.winfo_width() or self.normal_size[0]
+        ch = self.canvas.winfo_height() or self.normal_size[1]
         cx = wx + cw / 2.0
         cy = wy + ch / 2.0
         dx = pos[0] - cx
@@ -763,11 +779,11 @@ class PetApp:
     def _draw(self):
         c = self.canvas
         c.delete("all")
-        w = c.winfo_width() or NORMAL_SIZE[0]
-        h = c.winfo_height() or NORMAL_SIZE[1]
+        w = c.winfo_width() or self.normal_size[0]
+        h = c.winfo_height() or self.normal_size[1]
         cx, cy = w / 2.0, h / 2.0
         state = self.sm.current()
-        view_scale = MINI_SIZE[0] / NORMAL_SIZE[0] if self.mini else 1.0
+        view_scale = self.mini_size[0] / self.normal_size[0] if self.mini else 1.0
         # 专注久了打盹：呼吸变缓、眼睛半闭（对图片皮肤只做呼吸缓动）
         napping = (self._activity == "study" and self._focus_streak >= 600
                    and self.mood == 0 and not self.block_mode and not self.sm.sleeping)
@@ -823,8 +839,8 @@ class PetApp:
             if base is None:
                 return
             iw, ih = base.width(), base.height()
-            w = c.winfo_width() or NORMAL_SIZE[0]
-            h = c.winfo_height() or NORMAL_SIZE[1]
+            w = c.winfo_width() or self.normal_size[0]
+            h = c.winfo_height() or self.normal_size[1]
             if iw > w or ih > h:
                 factor_x = iw // w + (1 if iw % w else 0)
                 factor_y = ih // h + (1 if ih % h else 0)

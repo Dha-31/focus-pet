@@ -8,10 +8,14 @@ import json
 import os
 import tkinter as tk
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib import font_manager  # noqa: E402
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # noqa: E402
+    from matplotlib import font_manager  # noqa: E402
+    HAS_MPL = True
+except Exception:
+    HAS_MPL = False   # 精简版客户端未打包 matplotlib 时优雅降级
 
 from core.config import DATA_DIR  # noqa: E402
 from ui.theme_ui import accent_button, add_header, style_window  # noqa: E402
@@ -101,7 +105,10 @@ class ReportWindow:
 
         # 图表1：每日专注
         daily_focus = _daily_counts(sessions, "focus_minutes")
-        if daily_focus:
+        if not HAS_MPL:
+            tk.Label(self.root, text="（图表功能需要 matplotlib，本体验版未打包；文字统计仍可用）",
+                     fg="#e07a2f", font=("Microsoft YaHei UI", 9)).pack(pady=4)
+        if daily_focus and HAS_MPL:
             p1 = _bar_chart(daily_focus, "每日专注时长", "#5cb85c", "report_daily_focus.png")
             self._show_image(p1)
         else:
@@ -115,7 +122,7 @@ class ReportWindow:
                 day = (e.get("time") or "")[:10]
                 if day:
                     daily_dist[day] = daily_dist.get(day, 0) + 1
-        if daily_dist:
+        if daily_dist and HAS_MPL:
             p2 = _bar_chart(daily_dist, "每日分心次数", "#d9534f", "report_daily_distract.png")
             self._show_image(p2)
 

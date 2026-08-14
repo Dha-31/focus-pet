@@ -22,3 +22,8 @@ data/_tray_skin.ico
 
 data/report_*.png
 
+
+build/
+dist/
+*.spec
+

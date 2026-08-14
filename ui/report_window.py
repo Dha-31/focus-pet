@@ -80,9 +80,7 @@ class ReportWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("专注数据报表")
         self.root.geometry("600x660")
-        self.root.attributes("-topmost", True)
         self.root.transient(parent)
-        self.root.grab_set()
         style_window(self.root)
         self._build()
 
@@ -129,7 +127,7 @@ class ReportWindow:
         # 最近分心明细
         if dist_events:
             tk.Label(self.root, text="最近分心记录：", font=("Microsoft YaHei UI", 10)).pack(anchor="w", padx=14)
-            box = tk.Text(self.root, width=72, height=7, font=("Microsoft YaHei UI", 9))
+            box = tk.Text(self.root, width=88, height=16, font=("Microsoft YaHei UI", 9))
             box.pack(padx=10, pady=4)
             for e in dist_events[-8:]:
                 box.insert("end", f"{e.get('time', '')}  {e.get('detail', '')}\n")

@@ -14,9 +14,7 @@ class ShopWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("商店 - 专注币兑换")
         self.root.geometry("480x460")
-        self.root.attributes("-topmost", True)
         self.root.transient(parent)
-        self.root.grab_set()
         style_window(self.root)
         self._items = {}
         self._build()

@@ -126,6 +126,7 @@ CONFIG_SCHEMA = [
     {"path": "dnd.enabled", "file": "config", "category": "免打扰", "label": "免打扰模式", "type": "bool", "desc": "宠物闭嘴静音，监督照常（仍会检测/记录）"},
     {"path": "sound.enabled", "file": "config", "category": "音效", "label": "提示音效", "type": "bool", "desc": "完成/提醒/出错时的提示音（免打扰时自动静音）"},
     {"path": "hotkeys.enabled", "file": "config", "category": "快捷键", "label": "全局快捷键", "type": "bool", "desc": "Ctrl+Alt+S 开始/结束学习，Ctrl+Alt+H 显示/隐藏，Ctrl+Alt+M 迷你模式"},
+    {"path": "focus_assist.enabled", "file": "config", "category": "通知屏蔽", "label": "学习时屏蔽系统通知", "type": "bool", "desc": "开始学习自动开 Windows 专注助手（微信/QQ 等不弹通知、不闪烁、不响），结束恢复"},
     {"path": "extension.enabled", "file": "config", "category": "扩展", "label": "浏览器扩展桥接", "type": "bool"},
     {"path": "extension.port", "file": "config", "category": "扩展", "label": "桥接端口", "type": "int", "min": 1024, "max": 65535},
     {"path": "camera.enabled", "file": "config", "category": "摄像头", "label": "摄像头开关", "type": "bool"},

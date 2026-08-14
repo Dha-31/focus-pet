@@ -301,27 +301,38 @@ class PetApp:
                                   command=lambda: self._menu_mode("custom"))
         menu.add_cascade(label="多档模式", menu=mode_menu)
 
-        # 番茄钟
-        label = "番茄钟：开启" if not self.pomodoro_enabled else "番茄钟：关闭"
-        menu.add_command(label=label, command=self._menu_toggle_pomodoro)
-        # 免打扰 / 迷你模式（v3.6）
-        dnd_label = "免打扰：开启" if not self.dnd else "免打扰：关闭"
-        menu.add_command(label=dnd_label, command=self._menu_toggle_dnd)
-        mini_label = "迷你模式：开启" if not self.mini else "迷你模式：关闭"
-        menu.add_command(label=mini_label, command=self._menu_toggle_mini)
+        # 开关（勾选式：打勾 = 开启，状态一目了然）
+        self._pomodoro_var = tk.BooleanVar(value=self.pomodoro_enabled)
+        menu.add_checkbutton(label="番茄钟", variable=self._pomodoro_var,
+                             command=self._menu_toggle_pomodoro)
+        self._dnd_var = tk.BooleanVar(value=self.dnd)
+        menu.add_checkbutton(label="免打扰", variable=self._dnd_var,
+                             command=self._menu_toggle_dnd)
+        self._mini_var = tk.BooleanVar(value=self.mini)
+        menu.add_checkbutton(label="迷你模式", variable=self._mini_var,
+                             command=self._menu_toggle_mini)
         menu.add_separator()
 
-        menu.add_command(label="更换形象…", command=self._open_skin_dialog)
-        menu.add_command(label="导入主题包…", command=self._import_theme_zip)
-        menu.add_command(label="商店…", command=self._open_shop)
-        menu.add_command(label="我的空间…", command=self._open_space)
-        menu.add_command(label="成就…", command=self._menu_achievements)
-        menu.add_command(label="数据报表…", command=self._menu_report)
-        menu.add_command(label="设置…", command=self._menu_settings)
-        menu.add_command(label="使用帮助…", command=self._menu_help)
-        menu.add_command(label="这个是学习用的！", command=self._menu_teach)
+        # 形象
+        look_menu = tk.Menu(menu, tearoff=0)
+        look_menu.add_command(label="更换形象…", command=self._open_skin_dialog)
+        look_menu.add_command(label="导入主题包…", command=self._import_theme_zip)
+        menu.add_cascade(label="形象", menu=look_menu)
+        # 娱乐
+        fun_menu = tk.Menu(menu, tearoff=0)
+        fun_menu.add_command(label="商店…", command=self._open_shop)
+        fun_menu.add_command(label="我的空间…", command=self._open_space)
+        fun_menu.add_command(label="成就…", command=self._menu_achievements)
+        fun_menu.add_command(label="数据报表…", command=self._menu_report)
+        menu.add_cascade(label="娱乐", menu=fun_menu)
+        # 系统
+        sys_menu = tk.Menu(menu, tearoff=0)
+        sys_menu.add_command(label="设置…", command=self._menu_settings)
+        sys_menu.add_command(label="使用帮助…", command=self._menu_help)
+        sys_menu.add_command(label="这个是学习用的！", command=self._menu_teach)
         if self.tray_enabled:
-            menu.add_command(label="隐藏到托盘", command=self.hide)
+            sys_menu.add_command(label="隐藏到托盘", command=self.hide)
+        menu.add_cascade(label="系统", menu=sys_menu)
         menu.add_separator()
         menu.add_command(label="退出", command=self._menu_exit)
         self.canvas.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
@@ -389,14 +400,18 @@ class PetApp:
 
     # ---------- 商店 / 个人空间 ----------
     def _open_shop(self):
+        from ui import window_manager
         from ui.shop_window import ShopWindow
-        ShopWindow(self.root, self.inventory,
-                   on_equip=lambda aid: self.equip_accessory(aid),
-                   on_place=lambda fid: self.refresh_space())
+        win = ShopWindow(self.root, self.inventory,
+                         on_equip=lambda aid: self.equip_accessory(aid),
+                         on_place=lambda fid: self.refresh_space())
+        window_manager.open(win.root)
 
     def _open_space(self):
+        from ui import window_manager
         from ui.space_window import SpaceWindow
         self._space_win = SpaceWindow(self.root, self.inventory, self)
+        window_manager.open(self._space_win.root)
 
     def equip_accessory(self, aid):
         self.accessory = aid
@@ -412,14 +427,17 @@ class PetApp:
 
     # ---------- 更换形象对话框 ----------
     def _open_skin_dialog(self):
+        from ui import window_manager
         dialog = tk.Toplevel(self.root)
         dialog.title("更换形象")
-        dialog.geometry("360x460")
-        dialog.attributes("-topmost", True)
+        dialog.geometry("360x500")
         dialog.transient(self.root)
-        dialog.grab_set()
+        window_manager.open(dialog)
 
         add_header(dialog, "更换形象", "选一个形象，或导入你自己的图片 / 主题包").pack(padx=14, pady=(10, 0), anchor="w")
+        tk.Label(dialog, text="💡 主题包 = 一个 zip，里面能放多张状态图（生气/庆祝/睡觉…），"
+                              "比单张图更生动；可用 tools/theme_scaffold.py 生成。",
+                 fg="#888", font=("Microsoft YaHei UI", 8), wraplength=320, justify="left").pack(padx=14, anchor="w")
 
         self._skin_preview = tk.Label(dialog, bg="#f0f0f0", width=160, height=120)
         self._skin_preview.pack(pady=4)
@@ -479,8 +497,9 @@ class PetApp:
         dialog.destroy()
 
     def _import_skin(self, listbox):
+        parent = listbox.winfo_toplevel() if listbox is not None else self.root
         path = filedialog.askopenfilename(
-            parent=self.root,
+            parent=parent,
             title="选择宠物图片（PNG 优先）",
             filetypes=[("图片", "*.png *.jpg *.jpeg *.bmp *.webp"), ("所有文件", "*.*")],
         )
@@ -534,8 +553,9 @@ class PetApp:
             json.dump(manifest, f, ensure_ascii=False, indent=2)
 
     def _import_theme_zip(self, listbox=None):
+        parent = listbox.winfo_toplevel() if listbox is not None else self.root
         path = filedialog.askopenfilename(
-            parent=self.root,
+            parent=parent,
             title="选择主题包（zip）",
             filetypes=[("主题包", "*.zip"), ("所有文件", "*.*")],
         )
@@ -670,6 +690,7 @@ class PetApp:
             return
         self.mini = bool(on)
         self._set_geometry(MINI_SIZE if on else NORMAL_SIZE)
+        self._build_menu()   # 勾选状态刷新
 
     # ---------- 动画 ----------
     def _anim(self):

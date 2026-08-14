@@ -23,9 +23,7 @@ class SpaceWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("我的空间")
         self.root.geometry(f"{W}x{H + 46}")
-        self.root.attributes("-topmost", True)
         self.root.transient(parent)
-        self.root.grab_set()
         style_window(self.root)
 
         self.canvas = tk.Canvas(self.root, width=W, height=H, bg="#fdf6ec", highlightthickness=0)

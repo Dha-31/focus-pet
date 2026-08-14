@@ -235,6 +235,12 @@ def run_app():
         if session.start(goal):
             logbook.log_event("session_start", goal)
             sounds.play("start")
+            if cfg.get("focus_assist", {}).get("enabled"):
+                try:
+                    from core.focus_assist import enable as _fa_enable
+                    _fa_enable()
+                except Exception:
+                    pass
             pet.say(f"好！今天一起学{goal}！")
         else:
             pet.say("已经在学习啦！")
@@ -246,6 +252,11 @@ def run_app():
             return
         logbook.log_event("session_end", summary["goal"])
         check_achievements()
+        try:
+            from core.focus_assist import restore as _fa_restore
+            _fa_restore()
+        except Exception:
+            pass
         pet.celebrate(f"结束！专注 {summary['focus_minutes']} 分钟，"
                       f"分心 {summary['distract_minutes']} 分钟，"
                       f"好感度 {pet_state.affinity:.0f}")
@@ -294,20 +305,24 @@ def run_app():
 
     def on_open_achievements():
         check_achievements()
+        from ui import window_manager
         from ui.achievements_window import AchievementsWindow
-        AchievementsWindow(pet.root, achievements)
+        window_manager.open(AchievementsWindow(pet.root, achievements).root)
 
     def on_open_report():
+        from ui import window_manager
         from ui.report_window import ReportWindow
-        ReportWindow(pet.root)
+        window_manager.open(ReportWindow(pet.root).root)
 
     def on_open_settings():
+        from ui import window_manager
         from ui.settings_editor import SettingsEditor
-        SettingsEditor(pet.root, pet=pet)
+        window_manager.open(SettingsEditor(pet.root, pet=pet).root)
 
     def on_open_help(welcome=False):
+        from ui import window_manager
         from ui.help_window import HelpWindow
-        HelpWindow(pet.root, welcome=bool(welcome))
+        window_manager.open(HelpWindow(pet.root, welcome=bool(welcome)).root)
 
     escape_attempts = [0]
 
@@ -585,6 +600,11 @@ def run_app():
         pass
     finally:
         stop_event.set()
+        try:
+            from core.focus_assist import restore as _fa_restore
+            _fa_restore()
+        except Exception:
+            pass
         if tray is not None:
             try:
                 tray.destroy()
@@ -671,7 +691,22 @@ def camera_check():
         mon.stop()
     print("摄像头自检结束")
 
+def _enable_dpi_awareness():
+    """开启 DPI 感知：让 Tk 界面在 Windows 缩放下文字清晰（v3.7.1）。"""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
 def main():
+    _enable_dpi_awareness()
     parser = argparse.ArgumentParser(description="Focus Pet - 陪你学习也监督你学习")
     parser.add_argument("--headless-check", action="store_true", help="无界面自检核心逻辑")
     parser.add_argument("--camera-check", action="store_true", help="摄像头自检（约 5 秒）")

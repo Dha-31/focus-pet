@@ -11,9 +11,7 @@ class AchievementsWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("成就徽章")
         self.root.geometry("460x520")
-        self.root.attributes("-topmost", True)
         self.root.transient(parent)
-        self.root.grab_set()
         style_window(self.root)
         self._build()
 

@@ -1,4 +1,4 @@
-﻿"""core/help_data.py：帮助中心数据源（v3.7 预埋骨架）。
+"""core/help_data.py：帮助中心数据源（v3.7 预埋骨架）。
 
 【核心原则】帮助内容不手写死，而是从代码里的"单一事实来源"自动收集，
 这样帮助永远和实际功能同步，不会因为版本更新而过期：
@@ -14,7 +14,7 @@
 import os
 
 APP_NAME = "Focus Pet"
-VERSION = "3.6"          # 当前版本号（每次发版更新这里）
+VERSION = "3.7"          # 当前版本号（每次发版更新这里）
 DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs")
 
 # 功能条目（v3.7 帮助中心渲染用；随版本增补）
@@ -80,6 +80,10 @@ FEATURES = [
      "where": "设置 → 摄像头开关 + python main.py --camera-setup 选设备",
      "what": "看脸也看手：电脑前学习、纸上写字看书都算专注；人不在会提醒；本地处理不上传",
      "added_in": "2.0"},
+    {"id": "notify_block", "name": "通知屏蔽（专注助手）",
+     "where": "设置 → 通知屏蔽（默认开）；开始学习自动生效",
+     "what": "学习时自动开 Windows 专注助手：微信/QQ 等不弹通知、任务栏不闪烁、不响铃，结束恢复",
+     "added_in": "3.7"},
     {"id": "extension", "name": "浏览器扩展拦截",
      "where": "Chrome/Edge 手动加载 browser_extension/，设置里开启桥接",
      "what": "URL 级黑名单拦截 + 白名单特例 + 教宠物；打开黑名单网站跳转拦截页",

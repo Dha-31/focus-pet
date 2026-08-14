@@ -1,4 +1,4 @@
-﻿"""ui/help_window.py：使用帮助中心（v3.7）。
+"""ui/help_window.py：使用帮助中心（v3.7）。
 
 - 数据全部来自 core/help_data.py（数据驱动，随版本自动更新，不会过期）
 - 分页：功能一览 / 快捷键 / 设置项 / 常见问题 / 关于
@@ -43,6 +43,13 @@ FAQ = [
     ("用了自己的图片当桌宠，会不会不兼容？",
      "不会。一张图自动适配所有状态/装饰/托盘；想更生动可再放 angry.png / celebrate.png "
      "等单独状态图（见 tools/theme_scaffold.py）。"),
+    ("什么是主题包？怎么用？",
+     "主题包 = 一个 zip，里面可放多张状态图（生气/暴怒/庆祝/睡觉…）。"
+     "右键桌宠 → 形象 → 导入主题包… 选 zip 即可；比单张图更生动。"
+     "也可以用 python tools/theme_scaffold.py 你的图.png 名字 把一张图自动生成主题骨架。"),
+    ("怎么屏蔽微信/QQ 等软件的通知？",
+     "开始学习时会自动开启 Windows 专注助手（设置 → 通知屏蔽 可关）："
+     "其他应用不弹通知、任务栏不闪烁、不响铃；结束学习自动恢复原样。"),
 ]
 
 
@@ -52,9 +59,7 @@ class HelpWindow:
         self.root = tk.Toplevel(parent)
         self.root.title("Focus Pet 使用帮助")
         self.root.geometry("640x580")
-        self.root.attributes("-topmost", True)
         self.root.transient(parent)
-        self.root.grab_set()
         self._welcome_var = tk.BooleanVar(value=True)
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)

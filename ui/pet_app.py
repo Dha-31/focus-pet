@@ -65,6 +65,7 @@ class PetApp:
         self.latest_info = None
         self.closed = False
         self.tray_enabled = bool(tray_enabled)
+        self.on_skin_changed = None      # 换皮肤后的回调（main.py 用它更新托盘图标）
 
         self._queue = queue.Queue()
         self.theme_name = config.get("pet", {}).get("skin", "default")
@@ -172,6 +173,11 @@ class PetApp:
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
         self.reload_skin()
+        if self.on_skin_changed:
+            try:
+                self.on_skin_changed()
+            except Exception:
+                pass
         self.say("形象已更换！")
 
     # ---------- 窗口几何 / 位置记忆 ----------
@@ -734,3 +740,5 @@ class PetApp:
                          bx + 44, by + bh - 2, fill="white", outline="")
         c.create_text(bx + bw / 2, by + bh / 2, text=text, width=bw - 16,
                       fill="#333333", font=("Microsoft YaHei UI", 9))
+
+

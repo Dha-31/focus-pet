@@ -350,6 +350,22 @@ def run_app():
         pet.tray_enabled = False
     if bridge_error:
         pet.show_error(f"浏览器扩展桥接启动失败：{bridge_error}")
+
+    # 托盘图标跟随当前皮肤（自定义图像适配：换皮肤后托盘图标一起变）
+    def _update_tray_icon():
+        if tray is None:
+            return
+        try:
+            from core import theme as theme_mod
+            path = theme_mod.resolve_image_file(cfg.get("pet", {}).get("skin", "default"), "idle")
+            if path:
+                tray.set_icon_from_path(path)
+        except Exception:
+            pass
+
+    if tray is not None:
+        pet.on_skin_changed = _update_tray_icon
+        _update_tray_icon()
     pomodoro.on_state_change = lambda state: (
         pet.say("专注时间到！" if state == "focus" else "休息时间到啦，去喝口水吧~"))
 
@@ -615,6 +631,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

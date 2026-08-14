@@ -85,8 +85,25 @@ class NOTIFYICONDATAW(ctypes.Structure):
     ]
 
 
+def _ico_bytes_from_rgba(pixels, w, h):
+    """把 RGBA 像素矩阵（list[list[(r,g,b,a)]]）编码成 ICO 文件字节（无压缩 BGRA）。"""
+    xor = bytearray()
+    for y in range(h - 1, -1, -1):        # 自底向上
+        for x in range(w):
+            r, g, b, a = pixels[y][x]
+            xor += bytes((b, g, r, a))
+    and_row = ((w + 31) // 32) * 4
+    and_mask = bytearray(and_row * h)
+    bih = struct.pack("<IiiHHIIiiII", 40, w, h * 2, 1, 32, 0, len(xor), 0, 0, 0, 0)
+    data = bih + bytes(xor) + bytes(and_mask)
+    header = struct.pack("<HHH", 0, 1, 1)
+    entry = struct.pack("<BBBBHHII", w if w < 256 else 0, h if h < 256 else 0,
+                        0, 0, 1, 32, len(data), 22)
+    return header + entry + data
+
+
 def _make_icon_bytes(size=32):
-    """程序化画一只小猫头，返回 ICO 文件字节（BGRA 无压缩）。"""
+    """程序化画一只小猫头，返回 ICO 文件字节（RGBA 无压缩）。"""
     w = h = size
     cx = cy = size // 2
     r = size * 0.38
@@ -114,22 +131,28 @@ def _make_icon_bytes(size=32):
                         color = eye
                 if (x - cx) ** 2 + (y - (cy + r * 0.35)) ** 2 <= (r * 0.09) ** 2:
                     color = nose
-            row.append((color[2], color[1], color[0], color[3]))
+            row.append(color)
         pixels.append(row)
+    return _ico_bytes_from_rgba(pixels, w, h)
 
-    xor = bytearray()
-    for y in range(h - 1, -1, -1):        # 自底向上
-        for x in range(w):
-            b, g, rr, a = pixels[y][x]
-            xor += bytes((b, g, rr, a))
-    and_row = ((w + 31) // 32) * 4
-    and_mask = bytearray(and_row * h)
-    bih = struct.pack("<IiiHHIIiiII", 40, w, h * 2, 1, 32, 0, len(xor), 0, 0, 0, 0)
-    data = bih + bytes(xor) + bytes(and_mask)
-    header = struct.pack("<HHH", 0, 1, 1)
-    entry = struct.pack("<BBBBHHII", w if w < 256 else 0, h if h < 256 else 0,
-                        0, 0, 1, 32, len(data), 22)
-    return header + entry + data
+
+def pil_ico_bytes_from_path(path, size=32):
+    """用 PIL 把一张图片（含自定义皮肤）缩小成 32x32 的 ICO 字节；失败返回 None。"""
+    try:
+        from PIL import Image
+    except Exception:
+        return None
+    try:
+        img = Image.open(path).convert("RGBA")
+        img.thumbnail((size, size), Image.LANCZOS)
+        # 居中贴到 size x size 透明画布（保证 ICO 正方形）
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        iw, ih = img.size
+        canvas.paste(img, ((size - iw) // 2, (size - ih) // 2), img)
+        pixels = [[canvas.getpixel((x, y)) for x in range(size)] for y in range(size)]
+        return _ico_bytes_from_rgba(pixels, size, size)
+    except Exception:
+        return None
 
 
 def _ensure_icon():
@@ -158,6 +181,7 @@ class TrayIcon:
         self._nid = None
         self._wndproc = None
         self._class_atom = None
+        self._icons = []          # 已加载的 HICON 列表（防止被 GC + 统一释放）
         self._ok = False
         self._init()
 
@@ -232,6 +256,7 @@ class TrayIcon:
                 None, icon_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
             if not hicon:
                 return
+            self._icons.append(hicon)
 
             nid = NOTIFYICONDATAW()
             nid.cbSize = ctypes.sizeof(nid)
@@ -298,6 +323,29 @@ class TrayIcon:
         except Exception:
             pass
 
+    def set_icon_from_path(self, path):
+        """把托盘图标换成一张图片（如当前自定义皮肤）；失败则保持原图标。"""
+        if not self._ok or not self._nid:
+            return
+        try:
+            data = pil_ico_bytes_from_path(path)
+            if not data:
+                return
+            ico_path = os.path.join(PROJECT_ROOT, "data", "_tray_skin.ico")
+            with open(ico_path, "wb") as f:
+                f.write(data)
+            user32 = ctypes.windll.user32
+            user32.LoadImageW.restype = wintypes.HANDLE
+            hicon = user32.LoadImageW(None, ico_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+            if not hicon:
+                return
+            self._icons.append(hicon)
+            self._nid.hIcon = hicon
+            self._nid.uFlags = NIF_ICON
+            ctypes.windll.shell32.Shell_NotifyIconW(NIM_MODIFY, ctypes.byref(self._nid))
+        except Exception:
+            pass
+
     def set_tooltip(self, text):
         if not self._ok or not self._nid:
             return
@@ -316,6 +364,12 @@ class TrayIcon:
             shell32 = ctypes.windll.shell32
             if self._nid is not None:
                 ctypes.windll.shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(self._nid))
+            for h in self._icons:
+                try:
+                    user32.DestroyIcon(h)
+                except Exception:
+                    pass
+            self._icons = []
             if self._hwnd:
                 user32.DestroyWindow(self._hwnd)
             if self._class_atom:
@@ -327,6 +381,9 @@ class TrayIcon:
 
     def is_ok(self):
         return self._ok
+
+
+
 
 
 

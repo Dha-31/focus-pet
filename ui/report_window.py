@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib import font_manager  # noqa: E402
 
 from core.config import DATA_DIR  # noqa: E402
+from ui.theme_ui import accent_button, add_header, style_window  # noqa: E402
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -78,6 +79,7 @@ class ReportWindow:
         self.root.attributes("-topmost", True)
         self.root.transient(parent)
         self.root.grab_set()
+        style_window(self.root)
         self._build()
 
     def _build(self):

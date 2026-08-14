@@ -305,6 +305,10 @@ def run_app():
         from ui.settings_editor import SettingsEditor
         SettingsEditor(pet.root, pet=pet)
 
+    def on_open_help(welcome=False):
+        from ui.help_window import HelpWindow
+        HelpWindow(pet.root, welcome=bool(welcome))
+
     escape_attempts = [0]
 
     def on_exit():
@@ -345,9 +349,19 @@ def run_app():
                  on_open_settings=on_open_settings,
                  tray_enabled=True,
                  on_toggle_dnd=on_toggle_dnd,
-                 on_toggle_mini=on_toggle_mini)
+                 on_toggle_mini=on_toggle_mini,
+                 on_open_help=on_open_help)
 
     sounds.set_muted(pet.dnd)   # 免打扰初始状态同步给音效
+
+    # 首次启动：自动弹出帮助/欢迎（可勾选"下次不再显示"，右键「使用帮助…」随时打开）
+    if not cfg.get("first_run", {}).get("done"):
+        pet.root.after(600, lambda: on_open_help(welcome=True))
+        try:
+            cfg.setdefault("first_run", {})["done"] = True
+            save_config(cfg)
+        except Exception:
+            pass
 
     # 系统托盘（v3.5）：失败也不影响桌宠
     tray = None

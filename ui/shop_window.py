@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from core import shop
+from ui.theme_ui import accent_button, add_header, style_window
 
 
 class ShopWindow:
@@ -16,16 +17,16 @@ class ShopWindow:
         self.root.attributes("-topmost", True)
         self.root.transient(parent)
         self.root.grab_set()
+        style_window(self.root)
         self._items = {}
         self._build()
         self.refresh()
 
     def _build(self):
         self.coin_var = tk.StringVar()
+        add_header(self.root, "商店", "学习赚专注币，给宠物买装饰、给房间添家具！").pack(padx=14, pady=(12, 0), anchor="w")
         tk.Label(self.root, textvariable=self.coin_var,
-                 font=("Microsoft YaHei UI", 13, "bold")).pack(pady=(10, 4))
-        tk.Label(self.root, text="学习赚专注币，给宠物买装饰、给房间添家具！",
-                 fg="#888", font=("Microsoft YaHei UI", 9)).pack()
+                 font=("Microsoft YaHei UI", 12, "bold"), fg="#e07a2f").pack(pady=(6, 2))
 
         nb = ttk.Notebook(self.root)
         nb.pack(fill="both", expand=True, padx=8, pady=6)
@@ -36,7 +37,7 @@ class ShopWindow:
         self._build_tab(tab_acc, "accessory")
         self._build_tab(tab_fur, "furniture")
 
-        tk.Button(self.root, text="关闭", width=12, command=self.root.destroy).pack(pady=(0, 8))
+        accent_button(self.root, "关闭", self.root.destroy, width=10).pack(pady=(0, 10))
 
     def _build_tab(self, parent, kind):
         canvas = tk.Canvas(parent, highlightthickness=0)

@@ -39,6 +39,9 @@ DEFAULTS = {
     "hotkeys": {
         "enabled": True,             # 全局快捷键开关（v3.6）
     },
+    "first_run": {
+        "done": False,               # 首次启动帮助（v3.7）
+    },
     "extension": {
         "enabled": False,
         "port": 18765,

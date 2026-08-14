@@ -4,6 +4,7 @@ from tkinter import messagebox
 
 from core import shop
 from ui import pet_renderer
+from ui.theme_ui import accent_button, style_window
 
 W, H = 560, 420
 FLOOR_Y = int(H * 0.62)
@@ -25,13 +26,14 @@ class SpaceWindow:
         self.root.attributes("-topmost", True)
         self.root.transient(parent)
         self.root.grab_set()
+        style_window(self.root)
 
         self.canvas = tk.Canvas(self.root, width=W, height=H, bg="#fdf6ec", highlightthickness=0)
         self.canvas.pack()
         bar = tk.Frame(self.root)
         bar.pack(pady=6)
         tk.Button(bar, text="移除最后一件家具", command=self._remove_last).pack(side="left", padx=6)
-        tk.Button(bar, text="关闭", command=self.root.destroy).pack(side="left", padx=6)
+        accent_button(bar, "关闭", self.root.destroy).pack(side="left", padx=6)
         self._draw()
 
     # ---------- 房间 ----------
@@ -80,9 +82,9 @@ class SpaceWindow:
     def _draw_pet(self):
         c = self.canvas
         px, py = W // 2, FLOOR_Y + 18
-        if self.pet.image_skin is not None:
+        img = self.pet._image_for("idle")   # v3.5 主题系统：取兜底/待机图
+        if img is not None:
             try:
-                img = self.pet.image_skin
                 iw, ih = img.width(), img.height()
                 target_w = 90
                 scale = target_w / iw

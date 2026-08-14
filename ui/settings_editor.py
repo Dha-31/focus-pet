@@ -16,6 +16,7 @@ from tkinter import filedialog, messagebox, ttk
 from core.config import CONFIG_PATH, load_config, save_config
 from core.settings import SETTINGS_PATH, settings
 from core.settings_schema import CONFIG_SCHEMA, DEFAULTS, SETTINGS_SCHEMA
+from ui.theme_ui import add_header, style_window
 
 
 def _categories(schema):
@@ -36,11 +37,14 @@ class SettingsEditor:
         self.root.attributes("-topmost", True)
         self.root.transient(parent)
         self.root.grab_set()
+        style_window(self.root)
         self._rows = []  # (entry, getter, setter)
         self._build()
 
     # ---------- 界面 ----------
     def _build(self):
+        add_header(self.root, "集中配置编辑器",
+                  "所有参数集中一处：改一个值全项目生效（保存即热更新，无需重启）").pack(padx=14, pady=(12, 0), anchor="w")
         nb = ttk.Notebook(self.root)
         nb.pack(fill="both", expand=True, padx=8, pady=6)
         self._build_tab(nb, "开发者参数", SETTINGS_SCHEMA)

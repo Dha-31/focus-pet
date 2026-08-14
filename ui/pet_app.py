@@ -45,13 +45,14 @@ class PetApp:
                  on_start_study=None, on_end_study=None, on_toggle_pomodoro=None,
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
                  on_open_report=None, on_open_settings=None, tray_enabled=False,
-                 on_toggle_dnd=None, on_toggle_mini=None):
+                 on_toggle_dnd=None, on_toggle_mini=None, on_open_help=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
         self.on_toggle_pomodoro = on_toggle_pomodoro
         self.on_toggle_dnd = on_toggle_dnd
         self.on_toggle_mini = on_toggle_mini
+        self.on_open_help = on_open_help
         self.on_mode_change = on_mode_change
         self.on_exit = on_exit
         self.on_open_achievements = on_open_achievements
@@ -317,6 +318,7 @@ class PetApp:
         menu.add_command(label="成就…", command=self._menu_achievements)
         menu.add_command(label="数据报表…", command=self._menu_report)
         menu.add_command(label="设置…", command=self._menu_settings)
+        menu.add_command(label="使用帮助…", command=self._menu_help)
         menu.add_command(label="这个是学习用的！", command=self._menu_teach)
         if self.tray_enabled:
             menu.add_command(label="隐藏到托盘", command=self.hide)
@@ -380,6 +382,10 @@ class PetApp:
     def _menu_settings(self):
         if self.on_open_settings:
             self.on_open_settings()
+
+    def _menu_help(self):
+        if self.on_open_help:
+            self.on_open_help()
 
     # ---------- 商店 / 个人空间 ----------
     def _open_shop(self):

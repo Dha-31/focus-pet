@@ -2,6 +2,7 @@
 import tkinter as tk
 
 from core.achievements import ACHIEVEMENTS, AchievementManager
+from ui.theme_ui import add_header, style_window
 
 
 class AchievementsWindow:
@@ -13,15 +14,14 @@ class AchievementsWindow:
         self.root.attributes("-topmost", True)
         self.root.transient(parent)
         self.root.grab_set()
+        style_window(self.root)
         self._build()
 
     def _build(self):
         unlocked = len(self.manager.unlocked)
         total = len(ACHIEVEMENTS)
-        tk.Label(self.root, text=f"成就徽章　已解锁 {unlocked}/{total}",
-                 font=("Microsoft YaHei UI", 13, "bold")).pack(pady=(12, 4))
-        tk.Label(self.root, text="解锁成就可获得 20 专注币奖励！",
-                 fg="#888", font=("Microsoft YaHei UI", 9)).pack()
+        add_header(self.root, "成就徽章",
+                   f"已解锁 {unlocked}/{total} · 解锁成就可获得 20 专注币奖励！").pack(padx=14, pady=(12, 0), anchor="w")
 
         canvas = tk.Canvas(self.root, highlightthickness=0)
         scroll = tk.Scrollbar(self.root, orient="vertical", command=canvas.yview)

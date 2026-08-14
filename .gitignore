@@ -7,4 +7,5 @@ data/events.json
 data/learned.json
 skins/*/pet.png
 .DS_Store
-models/
+models/*.task
+dataset/

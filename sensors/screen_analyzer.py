@@ -26,6 +26,7 @@ STUDY_KEYWORDS = [
     "notes", "chapter", "abstract", "references", "introduction", "conclusion",
     "import ", "def ", "class ", "function", "return", "numpy", "pandas",
     "torch", "print", "代码", "编程", "算法", "程序", "数据结构",
+    "阅读", "训练", "单词", "词汇", "答案", "六级", "四级", "真题", "语法",
 ]
 DISTRACTION_KEYWORDS = [
     "直播", "视频", "播放", "弹幕", "点赞", "投币", "收藏", "关注", "订阅", "评论",

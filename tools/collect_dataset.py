@@ -16,12 +16,21 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from PIL import ImageGrab  # noqa: E402
 
+from sensors.screen_analyzer import capture_screen  # noqa: E402
+from sensors.window_monitor import get_foreground_info  # noqa: E402
+
 
 def save_screenshot(label):
     folder = os.path.join(PROJECT_ROOT, "dataset", label)
     os.makedirs(folder, exist_ok=True)
     n = len([f for f in os.listdir(folder) if f.endswith(".png")])
-    img = ImageGrab.grab()
+    info = get_foreground_info()
+    img = capture_screen(info["hwnd"] if info else None)
+    if img is None:
+        print("  截图失败，跳过")
+        return
+    if img.height > 120:
+        img = img.crop((0, 56, img.width, img.height))  # 裁掉标题栏/标签栏
     path = os.path.join(folder, f"real_{n + 1:03d}.png")
     img.save(path)
     print(f"  已保存: {path}")

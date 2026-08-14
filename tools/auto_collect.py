@@ -75,6 +75,9 @@ def main():
                 if latest and (time.time() - latest["ts"]) < 5:
                     url = latest["url"]
             cat = rules.classify(title=info["title"], process=info["process"], url=url)
+            proc_low = (info["process"] or "").lower()
+            if proc_low in ("windowsterminal.exe", "powershell.exe", "cmd.exe", "conhost.exe"):
+                cat = "skip"  # 终端模棱两可，跳过
             if cat == "unknown":
                 # 快速通道判定不了，用截图分析兜底
                 try:
@@ -89,6 +92,8 @@ def main():
 
                 from sensors.screen_analyzer import capture_screen
                 img = capture_screen(info["hwnd"])
+                if img is not None and img.height > 120:
+                    img = img.crop((0, 56, img.width, img.height))  # 裁掉标题栏/标签栏
                 if img is not None:
                     if last_img is None or _frame_diff(img, last_img) > 6:
                         last_img = img

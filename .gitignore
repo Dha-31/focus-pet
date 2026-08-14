@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/focus_log.json
+data/events.json
+data/learned.json
+skins/*/pet.png
+.DS_Store
+models/

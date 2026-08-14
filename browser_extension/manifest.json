@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Focus Pet Bridge",
+  "version": "0.1.0",
+  "description": "上报活动标签页给 Focus Pet（本地），并拦截黑名单网站（支持白名单特例与教宠物）。",
+  "permissions": ["tabs"],
+  "host_permissions": ["http://127.0.0.1:18765/*"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Focus Pet",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src http://127.0.0.1:18765;"
+  }
+}

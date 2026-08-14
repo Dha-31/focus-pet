@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Focus Pet 拦截</title>
+<style>
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+         background: #fff8f0; margin: 0; height: 100vh;
+         display: flex; align-items: center; justify-content: center; }
+  .card { text-align: center; max-width: 520px; padding: 32px; }
+  .pet { font-size: 80px; margin-bottom: 8px; }
+  h1 { color: #d9534f; font-size: 26px; margin: 8px 0; }
+  p { color: #555; }
+  .url { color: #999; word-break: break-all; font-size: 13px;
+         background: #fff; border: 1px dashed #ddd; border-radius: 8px;
+         padding: 10px; margin: 16px 0; }
+  button { margin: 8px; padding: 12px 24px; font-size: 15px;
+           border: none; border-radius: 10px; cursor: pointer; }
+  .teach { background: #5cb85c; color: #fff; }
+  .close { background: #eee; color: #333; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="pet">🐱😠</div>
+    <h1>Focus Pet 拦住你了！</h1>
+    <p>这个页面不在学习范围里，先去学习吧～</p>
+    <div class="url" id="url"></div>
+    <div>
+      <button class="teach" id="teach">我在学习这个页面！</button>
+      <button class="close" id="close">关掉这个标签页</button>
+    </div>
+  </div>
+  <script src="block.js"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "pomodoro": {
+    "enabled": false,
+    "focus_minutes": 25,
+    "break_minutes": 5
+  },
+  "blocking": {
+    "force_close_enabled": false,
+    "save_warning_seconds": 10,
+    "tiers_seconds": [
+      5,
+      15,
+      30,
+      60
+    ]
+  },
+  "supervision": {
+    "poll_interval_seconds": 1,
+    "camera_enabled": false
+  },
+  "lock": {
+    "enabled": false,
+    "exit_code": "1234"
+  },
+  "pet": {
+    "skin": "default"
+  },
+  "extension": {
+    "enabled": true,
+    "port": 18765
+  },
+  "camera": {
+    "enabled": true,
+    "device_index": 1,
+    "interval_seconds": 1
+  }
+}

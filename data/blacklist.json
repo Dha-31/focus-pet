@@ -1,0 +1,18 @@
+{
+  "urls": [
+    "bilibili.com", "b23.tv", "douyin.com", "kuaishou.com",
+    "tiktok.com", "youtube.com", "iqiyi.com", "youku.com",
+    "v.qq.com", "mgtv.com", "netflix.com", "twitch.tv",
+    "weibo.com", "zhihu.com", "douban.com", "xiaohongshu.com",
+    "reddit.com", "twitter.com", "x.com", "instagram.com",
+    "facebook.com", "discord.com", "tieba.baidu.com",
+    "taobao.com", "tmall.com", "jd.com", "pinduoduo.com",
+    "toutiao.com", "hupu.com",
+    "steampowered.com", "epicgames.com"
+  ],
+  "processes": [
+    "Douyin.exe", "TikTok.exe", "Kuaishou.exe",
+    "WeGame.exe", "steam.exe", "EpicGamesLauncher.exe", "Discord.exe"
+  ],
+  "titles": []
+}

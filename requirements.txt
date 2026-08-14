@@ -1,0 +1,8 @@
+# 基础功能只用 Python 标准库。摄像头（v2）需要以下包：
+#   pip install opencv-python mediapipe
+# 首次使用摄像头前运行: python tools/fetch_models.py （下载模型到 models/）
+#
+# 其他可选增强：
+# pillow            # 图片皮肤缩放 / 白色背景去除（tools/make_skin.py）
+# rembg             # AI 自动抠图（tools/make_skin.py，首次运行下载模型）
+# pywebview>=5.0    # 升级桌宠渲染为 HTML/CSS/JS（更精致的动画）

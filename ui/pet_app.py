@@ -45,8 +45,7 @@ class PetApp:
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
                  on_open_report=None, on_open_settings=None, tray_enabled=False,
                  on_toggle_dnd=None, on_toggle_mini=None, on_open_help=None,
-                 on_pet=None, on_checkin=None, on_feed=None, on_work=None,
-                 on_open_game=None):
+                 on_pet=None, on_checkin=None, on_feed=None, on_work=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
@@ -58,7 +57,6 @@ class PetApp:
         self.on_checkin = on_checkin          # 每日打卡
         self.on_feed = on_feed                # 投喂
         self.on_work = on_work                # 打工（工作时钟）
-        self.on_open_game = on_open_game      # 小游戏
         self.on_mode_change = on_mode_change
         self.on_exit = on_exit
         self.on_open_achievements = on_open_achievements
@@ -380,7 +378,6 @@ class PetApp:
         fun_menu.add_command(label="每日打卡…", command=self._menu_checkin)
         fun_menu.add_command(label="投喂…", command=self._menu_feed)
         fun_menu.add_command(label="打工…", command=self._menu_work)
-        fun_menu.add_command(label="小游戏…", command=self._menu_game)
         fun_menu.add_command(label="商店…", command=self._open_shop)
         fun_menu.add_command(label="我的空间…", command=self._open_space)
         fun_menu.add_command(label="成就…", command=self._menu_achievements)
@@ -549,9 +546,6 @@ class PetApp:
         if pick:
             self.on_work(int(pick))
 
-    def _menu_game(self):
-        if self.on_open_game:
-            self.on_open_game()
 
     def set_work(self, active, remaining=0):
         """打工状态（main.py 轮询调用）：active + 剩余秒数。"""
@@ -988,7 +982,7 @@ class PetApp:
             base = self._image_for(state)
             if base is None:
                 return None
-            disp = pet_renderer.fit_photo(base, w * 0.9, h * 0.9)
+            disp = pet_renderer.fit_photo(base, w * 0.72, h * 0.72)  # 留出上方/侧边空间放气泡，不挡角色
             self._skin_disp[key] = disp
         disp = self._skin_disp[key]
         dw, dh = disp.width(), disp.height()
@@ -1023,11 +1017,8 @@ class PetApp:
             ix0 = iy0 = 0.0
             ix1, iy1 = float(w), float(h)
         gap = 6
-        # 图像边缘常是透明/空白，避让时收缩 6%，气泡能贴近但又不压到实体
-        sx0 = ix0 + (ix1 - ix0) * 0.06
-        sy0 = iy0 + (iy1 - iy0) * 0.06
-        sx1 = ix1 - (ix1 - ix0) * 0.06
-        sy1 = iy1 - (iy1 - iy0) * 0.06
+        # 用图像原始边界避让：气泡必须完全在图像外，绝不压到角色实体
+        sx0, sy0, sx1, sy1 = ix0, iy0, ix1, iy1
         cx, cy = (hx if meta else w / 2.0), (hy if meta else h / 2.0)
 
         # 字号档：最大 12pt（用户偏好），随窗口/图像缩小而缩小，放不下自动降档
@@ -1053,7 +1044,7 @@ class PetApp:
                 measure = lambda s: len(s) * (fs + 2)
             pad_x = 12 + fs
             pad_y = 10 + fs
-            for ratio in (0.5, 0.34):
+            for ratio in (0.5, 0.34, 0.22):
                 max_w = max(80, int(w * ratio))
                 min_line_w = max(40, int(fs * 1.35 * 4))   # 每行至少放 4 个中文字符，避免两字就换行
                 inner_w = max(max(40, max_w - pad_x), min_line_w)
@@ -1073,12 +1064,11 @@ class PetApp:
                 if pos is not None:
                     self._paint_bubble(c, pos, last)
                     return
-        # 全部放不下：兜底——最小字号贴脑袋上方，宁可与图像边缘轻微重叠也不遮脑袋
+        # 全部放不下：兜底——最小字号放图像上方，截断到能放下，绝不遮图像/脑袋
         if last is not None:
             lines, fs, bw, bh = last
-            top_space = max(0, hy - hr - gap - 4)
+            top_space = max(0, sy0 - gap - 4)
             if bh > top_space:
-                # 用最小字号把文本截断到能放进脑袋上方的行数（绝不遮脑袋）
                 fs = 9
                 try:
                     f9 = tkfont.Font(family="Microsoft YaHei UI", size=fs)
@@ -1088,7 +1078,7 @@ class PetApp:
                     line_h = 15
                     measure = lambda s: len(s) * 11
                 pad_x = 12 + fs
-                inner_w = max(max(40, max(80, int(w * 0.34)) - pad_x), max(40, int(fs * 1.35 * 4)))
+                inner_w = max(max(40, max(80, int(w * 0.22)) - pad_x), max(40, int(fs * 1.35 * 4)))
                 lines = self._wrap_bubble_text(measure, text, inner_w)
                 max_lines = max(1, int((top_space - (10 + fs)) / max(1, line_h)))
                 if len(lines) > max_lines:
@@ -1101,7 +1091,7 @@ class PetApp:
                 bh = len(lines) * line_h + 10 + fs
                 last = (lines, fs, bw, bh)
             bx = max(4, min(cx - bw / 2, w - bw - 4))
-            by = max(4, hy - hr - gap - bh)
+            by = max(4, sy0 - gap - bh)
             self._paint_bubble(c, (bx, by, "bottom"), last)
 
     @staticmethod
@@ -1138,48 +1128,20 @@ class PetApp:
 
     @staticmethod
     def _pick_bubble_pos(w, h, bw, bh, cx, cy, sx0, sy0, sx1, sy1, hx, hy, hr, gap):
-        """优先贴脑袋右侧；放不下依次左侧/上方/下方。绝不遮脑袋圆、不跑脚底。
-
-        顺序：完全在图像右侧 -> 贴脑袋右侧（允许贴图像边缘，只避脑袋圆）
-              -> 完全在图像左侧 -> 贴脑袋左侧 -> 脑袋上方 -> 脑袋下方。
-        """
+        """优先图像右侧，依次 右→左→上；绝不挡图像实体、绝不遮脑袋、不落脚底。"""
         def clamp(x, y):
             return max(4, min(x, w - bw - 4)), max(4, min(y, h - bh - 4))
 
-        def clean_box(x, y):
-            """完全不挡图像（收缩盒外）且不遮脑袋。"""
+        candidates = (
+            (sx1 + gap, cy - bh / 2.0, "left"),       # 右（贴脑袋）
+            (sx0 - gap - bw, cy - bh / 2.0, "right"), # 左
+            (cx - bw / 2.0, sy0 - gap - bh, "bottom"), # 上
+        )
+        for x, y, tail in candidates:
             x, y = clamp(x, y)
             if PetApp._bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
-                return None
-            return (x, y)
-
-        def clean_head(x, y):
-            """贴脑袋：只要求不遮脑袋圆（允许与图像边缘重叠）。"""
-            x, y = clamp(x, y)
-            if PetApp._bubble_head_hit(x, y, bw, bh, hx, hy, hr):
-                return None
-            return (x, y)
-
-        # 1) 完全在图像右侧（最理想：既贴脑袋又完全不挡图）
-        p = clean_box(sx1 + gap, cy - bh / 2.0)
-        if p:
-            return (p[0], p[1], "left")
-        # 2) 贴脑袋右侧（允许与图像边缘重叠，但绝不遮脑袋）
-        p = clean_head(hx + hr + 4, cy - bh / 2.0)
-        if p:
-            return (p[0], p[1], "left")
-        # 3) 完全在图像左侧
-        p = clean_box(sx0 - gap - bw, cy - bh / 2.0)
-        if p:
-            return (p[0], p[1], "right")
-        # 4) 贴脑袋左侧
-        p = clean_head(hx - hr - 4 - bw, cy - bh / 2.0)
-        if p:
-            return (p[0], p[1], "right")
-        # 5) 脑袋上方（宁可在上方截断显示，也不落到脚底）
-        p = clean_head(cx - bw / 2.0, hy - hr - gap - bh)
-        if p:
-            return (p[0], p[1], "bottom")
+                continue
+            return (x, y, tail)
         return None
 
     @staticmethod

@@ -48,10 +48,6 @@ DEFAULTS = {
             {"id": "cake", "name": "蛋糕", "price": 25, "affinity": 18},
         ],
     },
-    "game": {
-        "coin_per_score": 1.0,  # 小游戏 1 分 = 1 币
-        "daily_cap": 50,        # 每天小游戏兑换上限（币）
-    },
     "space": {
         "scenes": ["cozy", "star", "sea", "forest"],
     },
@@ -139,13 +135,6 @@ SETTINGS_SCHEMA = [
     {"path": "work.options", "file": "settings", "category": "打工",
      "label": "可选打工时长(分钟)", "type": "list",
      "desc": "打工菜单里的时长选项，逗号分隔"},
-    # 小游戏
-    {"path": "game.coin_per_score", "file": "settings", "category": "小游戏",
-     "label": "得分兑换汇率（币/分）", "type": "float", "min": 0.1, "max": 10.0, "step": 0.1,
-     "desc": "小游戏每 1 分可兑换的专注币"},
-    {"path": "game.daily_cap", "file": "settings", "category": "小游戏",
-     "label": "每日兑换上限（币）", "type": "int", "min": 0, "max": 1000, "step": 5,
-     "desc": "每天小游戏兑换专注币的上限，防刷"},
     # 空间场景
     {"path": "space.scenes", "file": "settings", "category": "空间",
      "label": "可用场景列表", "type": "list",

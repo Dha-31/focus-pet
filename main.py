@@ -174,22 +174,10 @@ def run_app():
     inventory = Inventory()
     original_force_close = bool(cfg["blocking"]["force_close_enabled"])
     # v4.0.1：每日打卡 / 工作时钟 / 小游戏兑换
-    import json as _json
-    import os as _os
-    import datetime as _dt
     from core.checkin import CheckIn
     from core.work import WorkClock
-    from core.config import DATA_DIR as _DATA_DIR
     checkin = CheckIn()
     work_clock = WorkClock()
-    _game_file = _os.path.join(_DATA_DIR, "game.json")
-    game_state = {}
-    if _os.path.exists(_game_file):
-        try:
-            with open(_game_file, "r", encoding="utf-8-sig") as _f:
-                game_state = _json.load(_f)
-        except (_json.JSONDecodeError, OSError):
-            pass
 
     MODE_TIERS = settings.get("blocking.tiers") or {
         "relaxed": [10, 30, 60, 120],
@@ -414,31 +402,6 @@ def run_app():
         else:
             pet.say("现在不能打工哦")
 
-    def on_game_claim(score):
-        """小游戏结算：按汇率兑换专注币，每天上限防刷。返回实际入账。"""
-        if score <= 0:
-            return 0
-        rate = float(settings.get("game.coin_per_score", 1.0))
-        cap = float(settings.get("game.daily_cap", 50))
-        today = _dt.date.today().isoformat()
-        used = game_state.get("claimed", 0) if game_state.get("date") == today else 0
-        allow = int(min(score * rate, cap - used))
-        if allow <= 0:
-            return 0
-        inventory.add_coins(allow)
-        game_state["date"] = today
-        game_state["claimed"] = used + allow
-        try:
-            with open(_game_file, "w", encoding="utf-8") as _f:
-                _json.dump(game_state, _f, ensure_ascii=False, indent=2)
-        except OSError:
-            pass
-        return allow
-
-    def on_open_game():
-        from ui import window_manager
-        from ui.game_window import GameWindow
-        window_manager.open(GameWindow(pet.root, on_claim=on_game_claim).root)
 
     def check_work():
         """主线程轮询工作时钟：更新头顶徽章、到期自动结算。"""
@@ -476,7 +439,7 @@ def run_app():
                  on_toggle_mini=on_toggle_mini,
                  on_open_help=on_open_help,
                  on_pet=on_pet, on_checkin=on_checkin, on_feed=on_feed,
-                 on_work=on_work, on_open_game=on_open_game)
+                 on_work=on_work)
 
     sounds.set_muted(pet.dnd)   # 免打扰初始状态同步给音效
 

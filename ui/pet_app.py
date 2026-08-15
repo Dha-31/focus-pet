@@ -836,11 +836,11 @@ class PetApp:
                 jump = -abs(math.sin(math.pi * prog)) * 6
         cx += sway + pacing
         cy += jump
-        # 宠物本体（记录"脑袋"位置，气泡贴脑袋右边）
-        head = None
+        # 宠物本体（记录"脑袋"与整体范围，气泡找不遮挡图像的空白位置）
+        meta = None
         img = self._image_for(state)
         if img is not None:
-            head = self._draw_image(c, cx, cy + bob, shake, state)
+            meta = self._draw_image(c, cx, cy + bob, shake, state)
         else:
             lean = self._look_dx * 3 if self._looking else 0.0
             s_eff = view_scale * (1.0 + min(0.4, (self.level - 1) * 0.08))
@@ -850,6 +850,9 @@ class PetApp:
                 look=(self._look_dx, self._look_dy) if self._looking else None,
                 view_scale=view_scale, napping=napping)
             head = (cx + lean, cy + bob - 14 * s_eff, 26 * s_eff)
+            meta = {"head": head,
+                    "box": (cx + lean - 46 * s_eff, cy + bob - 58 * s_eff,
+                            cx + lean + 46 * s_eff, cy + bob + 52 * s_eff)}
         # 状态特效（随迷你模式一起缩小）
         if state == "celebrate":
             pet_renderer.draw_celebrate_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
@@ -858,7 +861,7 @@ class PetApp:
         elif state == "sleep":
             pet_renderer.draw_sleep_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
         if not self.mini:
-            self._draw_bubble(c, w, h, head, view_scale)
+            self._draw_bubble(c, w, h, meta, view_scale)
 
     def _draw_image(self, c, cx, cy, shake, state):
         w = c.winfo_width() or self.normal_size[0]
@@ -886,45 +889,58 @@ class PetApp:
             pet_renderer.draw_accessory(c, hx, hy, hr, self.accessory)
         if self.mood >= 1:
             pet_renderer.draw_expression_overlay(c, hx, hy, hr, self.mood)
-        return (hx, hy, hr)
+        # 图像在窗口中的整体范围（气泡避让用）
+        box = (cx + shake - dw / 2, cy - dh / 2, cx + shake + dw / 2, cy + dh / 2)
+        return {"head": (hx, hy, hr), "box": box}
 
-    def _draw_bubble(self, c, w, h, head=None, view_scale=1.0):
+    def _draw_bubble(self, c, w, h, meta=None, view_scale=1.0):
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
-        scale = max(0.6, min(2.5, view_scale))
-        font_size = max(8, min(20, int(9 * scale)))
-        # 先量文字：按内宽换行，算行数和实际需要的高度，保证字不超出气泡
+        # 大小克制：按文字实际宽度自适应，随图像缩放但上限适中
+        scale = max(0.7, min(1.6, view_scale))
+        font_size = max(8, min(14, int(9 * scale)))
         try:
             from tkinter import font as tkfont
             _f = tkfont.Font(family="Microsoft YaHei UI", size=font_size)
-            bw = int(min(360, 260 * scale))
-            if bw > w - 16:
-                bw = w - 16
-            inner_w = max(60, bw - 20)
+            max_w = max(80, int(w * 0.45))            # 不超过窗口 45%
+            bw = min(max_w, int(_f.measure(text) + 22 * scale))
+            bw = max(56, bw)
+            inner_w = max(40, bw - 18)
             line_h = _f.metrics("linespace")
             lines = max(1, int((_f.measure(text) + inner_w - 1) // inner_w))
-            bh = lines * line_h + int(12 * scale)
+            bh = lines * line_h + int(10 * scale)
         except Exception:
-            bw = int(min(320, 240 * scale))
-            bh = int(54 * scale)
-        # 锚点：有脑袋则贴在脑袋右边，否则右上角
-        if head:
-            hx, hy, hr = head
-            bx = hx + hr + 10
-            by = hy - bh * 0.8
+            bw = int(min(max(80, int(w * 0.4)), 240))
+            bh = 40
+        # 角色范围（气泡避让，不挡图像）
+        if meta:
+            hx, hy, hr = meta["head"]
+            ix0, iy0, ix1, iy1 = meta["box"]
+            cx, cy = hx, hy
         else:
-            bx, by = 10, 10
-        # 放不下就放脑袋左边；再 clamp 到窗口内
-        if bx + bw > w - 4:
-            bx = (hx - hr - bw - 10) if head else (w - bw - 4)
-        if bx < 4:
-            bx = 4
-        if by < 4:
-            by = 4
-        if by + bh > h - 4:
-            by = h - bh - 4
-        r = max(6, int(10 * scale))
+            hx = hy = hr = 0
+            ix0 = iy0 = 0; ix1 = w; iy1 = h
+            cx, cy = w / 2, h / 2
+        gap = 6
+        candidates = [
+            (ix1 + gap, cy - bh / 2),            # 右
+            (ix0 - gap - bw, cy - bh / 2),       # 左
+            (cx - bw / 2, iy0 - gap - bh),       # 上
+            (cx - bw / 2, iy1 + gap),            # 下
+        ]
+        bx = by = None
+        for x, y in candidates:
+            x = max(4, min(x, w - bw - 4))
+            y = max(4, min(y, h - bh - 4))
+            # 不与角色范围重叠
+            if not (x < ix1 and x + bw > ix0 and y < iy1 and y + bh > iy0):
+                bx, by = x, y
+                break
+        if bx is None:   # 都重叠/放不下 → 就近 clamp（宁可小重叠也不出窗口）
+            bx = max(4, min(candidates[0][0], w - bw - 4))
+            by = max(4, min(candidates[0][1], h - bh - 4))
+        r = max(6, int(9 * scale))
         # 圆角气泡
         c.create_oval(bx, by, bx + 2 * r, by + 2 * r, fill="white", outline="#dddddd")
         c.create_oval(bx + bw - 2 * r, by, bx + bw, by + 2 * r, fill="white", outline="#dddddd")
@@ -933,7 +949,7 @@ class PetApp:
         c.create_rectangle(bx + r, by, bx + bw - r, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx, by + r, bx + bw, by + bh - r, fill="white", outline="#dddddd")
         # 小尾巴（朝角色方向）
-        if head and bx > hx:
+        if bx + bw / 2 > cx:
             c.create_polygon(bx + 8, by + bh - 2, bx + 16, by + bh + 10,
                              bx + 26, by + bh - 2, fill="white", outline="")
         else:

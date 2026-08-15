@@ -1015,32 +1015,66 @@ class PetApp:
 
     @staticmethod
     def _pick_bubble_pos(w, h, bw, bh, cx, cy, sx0, sy0, sx1, sy1, hx, hy, hr, gap):
-        """四方向找第一个不挡角色（图像收缩盒 + 脑袋圆）的位置；放不下返回 None。"""
-        candidates = (
-            (sx1 + gap, cy - bh / 2.0, "left"),     # 右（贴脑袋，尾巴朝左）
-            (sx0 - gap - bw, cy - bh / 2.0, "right"),
-            (cx - bw / 2.0, sy0 - gap - bh, "bottom"),
-            (cx - bw / 2.0, sy1 + gap, "top"),
-        )
-        for x, y, tail in candidates:
-            x = max(4, min(x, w - bw - 4))
-            y = max(4, min(y, h - bh - 4))
+        """优先贴脑袋右侧；放不下依次左侧/上方/下方。绝不遮脑袋圆、不跑脚底。
+
+        顺序：完全在图像右侧 -> 贴脑袋右侧（允许贴图像边缘，只避脑袋圆）
+              -> 完全在图像左侧 -> 贴脑袋左侧 -> 脑袋上方 -> 脑袋下方。
+        """
+        def clamp(x, y):
+            return max(4, min(x, w - bw - 4)), max(4, min(y, h - bh - 4))
+
+        def clean_box(x, y):
+            """完全不挡图像（收缩盒外）且不遮脑袋。"""
+            x, y = clamp(x, y)
             if PetApp._bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
-                continue
-            return (x, y, tail)
+                return None
+            return (x, y)
+
+        def clean_head(x, y):
+            """贴脑袋：只要求不遮脑袋圆（允许与图像边缘重叠）。"""
+            x, y = clamp(x, y)
+            if PetApp._bubble_head_hit(x, y, bw, bh, hx, hy, hr):
+                return None
+            return (x, y)
+
+        # 1) 完全在图像右侧（最理想：既贴脑袋又完全不挡图）
+        p = clean_box(sx1 + gap, cy - bh / 2.0)
+        if p:
+            return (p[0], p[1], "left")
+        # 2) 贴脑袋右侧（允许与图像边缘重叠，但绝不遮脑袋）
+        p = clean_head(hx + hr + 4, cy - bh / 2.0)
+        if p:
+            return (p[0], p[1], "left")
+        # 3) 完全在图像左侧
+        p = clean_box(sx0 - gap - bw, cy - bh / 2.0)
+        if p:
+            return (p[0], p[1], "right")
+        # 4) 贴脑袋左侧
+        p = clean_head(hx - hr - 4 - bw, cy - bh / 2.0)
+        if p:
+            return (p[0], p[1], "right")
+        # 5) 脑袋上方（宁可在上方截断显示，也不落到脚底）
+        p = clean_head(cx - bw / 2.0, hy - hr - gap - bh)
+        if p:
+            return (p[0], p[1], "bottom")
         return None
 
     @staticmethod
-    def _bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
-        """气泡矩形是否与图像收缩盒或脑袋圆重叠。"""
-        if not (x + bw <= sx0 or x >= sx1 or y + bh <= sy0 or y >= sy1):
-            return True
+    def _bubble_head_hit(x, y, bw, bh, hx, hy, hr):
+        """气泡矩形是否遮到脑袋圆。"""
         if hr > 0:
             nx = max(x, min(hx, x + bw))
             ny = max(y, min(hy, y + bh))
             if (hx - nx) ** 2 + (hy - ny) ** 2 < hr * hr:
                 return True
         return False
+
+    @staticmethod
+    def _bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
+        """气泡矩形是否与图像收缩盒重叠，或遮到脑袋圆。"""
+        if not (x + bw <= sx0 or x >= sx1 or y + bh <= sy0 or y >= sy1):
+            return True
+        return PetApp._bubble_head_hit(x, y, bw, bh, hx, hy, hr)
 
     @staticmethod
     def _paint_bubble(c, pos, last):

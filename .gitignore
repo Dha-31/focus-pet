@@ -6,6 +6,7 @@ data/focus_log.json
 data/events.json
 data/learned.json
 skins/*/pet.png
+skins/*/theme.json
 .DS_Store
 models/*.task
 dataset/

@@ -143,6 +143,11 @@ python main.py --log      # 查看分心日志时间线
 python tools/make_skin.py 你的图片.png 我的小猫
 ```
 - 自动处理：rembg AI 抠图 →（不可用则）PIL 白色背景去除 + 缩放 → 直接复制
+- 首次 AI 抠图需联网下载约 300MB BiRefNet 模型（网慢会久）。可提前预下载（带进度条）：
+  ```powershell
+  python tools/fetch_birefnet.py
+  ```
+- 不想用 AI 抠图时：`python tools/make_skin.py 你的图片.png 我的小猫 --no-rembg`（快速白色去底）
 - 生成到 `skins/我的小猫/pet.png`，自动改配置，重启桌宠生效
 
 **手动方式**：图片（透明 PNG 更好）存成 `skins/<名字>/pet.png`，把 `data/config.json` 的

@@ -1005,24 +1005,29 @@ class PetApp:
         return {"head": (hx, hy, hr), "box": box}
 
     def _draw_bubble(self, c, w, h, meta=None, view_scale=1.0):
-        """说话气泡（照搬 VPet MessageBar）：固定图像正下方、Tk 原生换行、完整显示不截断不加省略号、不遮角色。"""
+        """说话气泡：固定脑袋右侧（用户偏好），Tk 原生换行、完整显示不截断不加省略号。"""
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
-        fs = max(9, min(13, int(6.5 * view_scale)))
+        fs = max(9, min(12, int(6.5 * view_scale)))
         pad_x, pad_y = 12, 8
-        max_text_w = max(40, w - 2 * pad_x - 8)
-        # 先临时测文字实际尺寸（Tk 按 width 自动换行，不截断）
+        if meta:
+            hx, hy, hr = meta["head"]
+        else:
+            hx, hy, hr = w / 2.0, h / 2.0, w * 0.15
+        # 脑袋右侧可用宽度
+        right_space = max(60, w - (hx + hr) - 8)
+        max_text_w = max(40, int(right_space - 2 * pad_x))
+        # 先临时测文字实际尺寸（Tk 自动换行，完整显示）
         tmp = c.create_text(0, 0, text=text, width=max_text_w, anchor="nw",
                             font=("Microsoft YaHei UI", fs))
         tx0, ty0, tx1, ty1 = c.bbox(tmp)
         c.delete(tmp)
         bw = int(tx1 - tx0 + 2 * pad_x)
         bh = int(ty1 - ty0 + 2 * pad_y)
-        # 位置：图像正下方（VPet 消息栏位置），放不下就贴近窗口底部
-        foot_y = int(meta["box"][3]) if meta else int(h * 0.65)
-        by = max(4, int(min(h - bh - 4, foot_y + 6)))
-        bx = 4
+        # 位置：脑袋右侧，垂直居中于脑袋
+        bx = max(4, int(hx + hr + 4))
+        by = max(4, int(min(h - bh - 4, hy - bh / 2.0)))
         # 圆角白底气泡
         r = 10
         c.create_oval(bx, by, bx + 2 * r, by + 2 * r, fill="white", outline="#dddddd")

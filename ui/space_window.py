@@ -14,6 +14,44 @@ SLOTS = [
     (70, FLOOR_Y + 60), (190, FLOOR_Y + 60), (310, FLOOR_Y + 60),
     (430, FLOOR_Y + 60), (130, FLOOR_Y + 110), (430, FLOOR_Y + 110),
 ]
+# v4.0.1：空间场景切换（二维小世界第一步）
+DEFAULT_SCENE = "cozy"
+SCENES = {
+    "cozy":   {"name": "温馨小屋", "wall": "#fdf1dd", "floor": "#d9b380",
+               "floor_line": "#c49a66", "trim": "#b8894f", "accent": "#e8b4c8"},
+    "star":   {"name": "星空书房", "wall": "#2a3158", "floor": "#3b4368",
+               "floor_line": "#4a5478", "trim": "#5a6aa0", "accent": "#ffd166"},
+    "sea":    {"name": "海边", "wall": "#bfe3ff", "floor": "#e8d9a0",
+               "floor_line": "#d4c27f", "trim": "#8a9bb0", "accent": "#5aa0e0"},
+    "forest": {"name": "森林", "wall": "#d9eec9", "floor": "#a8c77a",
+               "floor_line": "#8fb064", "trim": "#6d9448", "accent": "#5cb85c"},
+}
+
+
+def _space_path():
+    import json
+    import os
+    from core.config import DATA_DIR
+    return os.path.join(DATA_DIR, "space.json")
+
+
+def load_scene():
+    import json
+    import os
+    try:
+        with open(_space_path(), "r", encoding="utf-8-sig") as f:
+            s = json.load(f).get("scene", DEFAULT_SCENE)
+        return s if s in SCENES else DEFAULT_SCENE
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_SCENE
+
+
+def save_scene(scene):
+    import json
+    if scene not in SCENES:
+        scene = DEFAULT_SCENE
+    with open(_space_path(), "w", encoding="utf-8") as f:
+        json.dump({"scene": scene}, f, ensure_ascii=False, indent=2)
 
 
 class SpaceWindow:
@@ -25,11 +63,15 @@ class SpaceWindow:
         self.root.geometry(f"{W}x{H + 46}")
         style_window(self.root)
 
+        self.scene = load_scene()
         self.canvas = tk.Canvas(self.root, bg="#fdf6ec", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Configure>", lambda e: self._draw())
         bar = tk.Frame(self.root)
         bar.pack(pady=6)
+        tk.Label(bar, text="场景:", font=("Microsoft YaHei UI", 10)).pack(side="left", padx=(6, 2))
+        self._scene_var = tk.StringVar(value=self.scene)
+        tk.OptionMenu(bar, self._scene_var, *list(SCENES.keys()), command=self._switch_scene).pack(side="left", padx=4)
         tk.Button(bar, text="移除最后一件家具", command=self._remove_last).pack(side="left", padx=6)
         accent_button(bar, "关闭", self.root.destroy).pack(side="left", padx=6)
         self._draw()
@@ -37,15 +79,17 @@ class SpaceWindow:
     # ---------- 房间 ----------
     def _draw_room(self, cw, ch):
         c = self.canvas
+        s = SCENES.get(self.scene, SCENES[DEFAULT_SCENE])
         fy = int(ch * 0.62)
         # 墙
-        c.create_rectangle(0, 0, cw, fy, fill="#fdf1dd", outline="")
+        c.create_rectangle(0, 0, cw, fy, fill=s["wall"], outline="")
         # 地板
-        c.create_rectangle(0, fy, cw, ch, fill="#d9b380", outline="")
+        c.create_rectangle(0, fy, cw, ch, fill=s["floor"], outline="")
         for i in range(0, cw, 46):
-            c.create_line(i, fy, i, ch, fill="#c49a66")
+            c.create_line(i, fy, i, ch, fill=s["floor_line"])
         # 踢脚线
-        c.create_line(0, fy, cw, fy, fill="#b8894f", width=3)
+        c.create_line(0, fy, cw, fy, fill=s["trim"], width=3)
+        self._draw_scene_decor(c, cw, fy, s)
 
     def _draw_furniture(self, kind, x, y):
         c = self.canvas
@@ -76,6 +120,33 @@ class SpaceWindow:
             c.create_rectangle(x - 60, y - 34, x + 60, y + 20, fill="#7db6e0", outline="#4a7ba0", width=3)
             c.create_rectangle(x - 66, y - 44, x - 50, y + 20, fill="#7db6e0", outline="#4a7ba0", width=3)
             c.create_rectangle(x + 50, y - 44, x + 66, y + 20, fill="#7db6e0", outline="#4a7ba0", width=3)
+
+    def _switch_scene(self, scene):
+        self.scene = scene if scene in SCENES else DEFAULT_SCENE
+        save_scene(self.scene)
+        self._draw()
+
+    def _draw_scene_decor(self, c, cw, fy, s):
+        """按场景画装饰元素（星空月亮、海浪、树木等）。"""
+        if self.scene == "star":
+            c.create_text(90, 60, text="🌙", font=("Microsoft YaHei UI", 34))
+            for sx, sy in ((180, 40), (260, 90), (340, 50), (450, 80), (560, 40), (640, 100)):
+                c.create_text(sx, sy, text="✦", fill="#ffd166", font=("Microsoft YaHei UI", 14))
+        elif self.scene == "sea":
+            c.create_text(560, 55, text="🌞", font=("Microsoft YaHei UI", 30))
+            for wx, wy in ((60, 120), (180, 100), (300, 130), (430, 105), (540, 125)):
+                c.create_arc(wx - 34, wy - 12, wx + 34, wy + 12, start=0, extent=180,
+                             style="arc", outline="#7fb8e0", width=3)
+        elif self.scene == "forest":
+            for tx, ty, sc in ((80, 110, 1.2), (220, 125, 0.9), (520, 115, 1.1), (640, 130, 0.8)):
+                c.create_polygon(tx - 30 * sc, ty + 20, tx + 30 * sc, ty + 20, tx, ty - 46 * sc,
+                                 fill="#3f8f4a", outline="#2f6f38")
+                c.create_polygon(tx - 22 * sc, ty - 16, tx + 22 * sc, ty - 16, tx, ty - 72 * sc,
+                                 fill="#4aa858", outline="#3a8a46")
+        else:  # cozy
+            c.create_rectangle(cw - 210, 40, cw - 40, 150, fill="#fff8ee", outline="#c9b28a", width=3)
+            c.create_oval(cw - 195, 60, cw - 165, 90, fill="#e0a24a", outline="")
+            c.create_rectangle(cw - 150, 55, cw - 130, 145, fill="#8a6d4a", outline="")
 
     # ---------- 宠物 ----------
     def _draw_pet(self):

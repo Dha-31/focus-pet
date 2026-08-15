@@ -33,6 +33,28 @@ DEFAULTS = {
             "table": 40, "bookshelf": 60, "sofa": 80,
         },
     },
+    "checkin": {
+        "base_reward": 10,      # 每日打卡基础奖励金币
+        "streak_bonus": 2,      # 连续签到额外加成（连续第 N 天 +N*2 币）
+    },
+    "work": {
+        "rate_per_min": 2.0,    # 打工汇率（币/分钟）
+        "options": [30, 60, 120],   # 可选打工时长（分钟）
+    },
+    "feed": {
+        "items": [
+            {"id": "fish", "name": "小鱼干", "price": 10, "affinity": 6},
+            {"id": "milk", "name": "牛奶", "price": 15, "affinity": 10},
+            {"id": "cake", "name": "蛋糕", "price": 25, "affinity": 18},
+        ],
+    },
+    "game": {
+        "coin_per_score": 1.0,  # 小游戏 1 分 = 1 币
+        "daily_cap": 50,        # 每天小游戏兑换上限（币）
+    },
+    "space": {
+        "scenes": ["cozy", "star", "sea", "forest"],
+    },
     "keywords": {
         "study": [
             "目录", "摘要", "参考文献", "关键词", "讲义", "课件", "笔记", "作业",
@@ -103,6 +125,32 @@ SETTINGS_SCHEMA = [
     {"path": "shop.prices.table", "file": "settings", "category": "商店", "label": "学习桌价格", "type": "int", "min": 0, "max": 1000},
     {"path": "shop.prices.bookshelf", "file": "settings", "category": "商店", "label": "书架价格", "type": "int", "min": 0, "max": 1000},
     {"path": "shop.prices.sofa", "file": "settings", "category": "商店", "label": "沙发价格", "type": "int", "min": 0, "max": 1000},
+    # 打卡
+    {"path": "checkin.base_reward", "file": "settings", "category": "打卡",
+     "label": "每日打卡基础奖励", "type": "int", "min": 0, "max": 1000, "step": 1,
+     "desc": "每天首次打卡领取的基础专注币"},
+    {"path": "checkin.streak_bonus", "file": "settings", "category": "打卡",
+     "label": "连续签到加成/天", "type": "int", "min": 0, "max": 100, "step": 1,
+     "desc": "连续第 N 天打卡额外 +N*此值 金币"},
+    # 打工
+    {"path": "work.rate_per_min", "file": "settings", "category": "打工",
+     "label": "打工汇率（币/分钟）", "type": "float", "min": 0.1, "max": 20.0, "step": 0.5,
+     "desc": "宠物打工每分钟赚的专注币"},
+    {"path": "work.options", "file": "settings", "category": "打工",
+     "label": "可选打工时长(分钟)", "type": "list",
+     "desc": "打工菜单里的时长选项，逗号分隔"},
+    # 小游戏
+    {"path": "game.coin_per_score", "file": "settings", "category": "小游戏",
+     "label": "得分兑换汇率（币/分）", "type": "float", "min": 0.1, "max": 10.0, "step": 0.1,
+     "desc": "小游戏每 1 分可兑换的专注币"},
+    {"path": "game.daily_cap", "file": "settings", "category": "小游戏",
+     "label": "每日兑换上限（币）", "type": "int", "min": 0, "max": 1000, "step": 5,
+     "desc": "每天小游戏兑换专注币的上限，防刷"},
+    # 空间场景
+    {"path": "space.scenes", "file": "settings", "category": "空间",
+     "label": "可用场景列表", "type": "list",
+     "desc": "我的空间可切换的场景 id，逗号分隔"},
+
     # 关键词
     {"path": "keywords.study", "file": "settings", "category": "关键词",
      "label": "学习关键词", "type": "textlist", "height": 6,

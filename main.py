@@ -173,6 +173,23 @@ def run_app():
     pet_state = PetState()
     inventory = Inventory()
     original_force_close = bool(cfg["blocking"]["force_close_enabled"])
+    # v4.0.1：每日打卡 / 工作时钟 / 小游戏兑换
+    import json as _json
+    import os as _os
+    import datetime as _dt
+    from core.checkin import CheckIn
+    from core.work import WorkClock
+    from core.config import DATA_DIR as _DATA_DIR
+    checkin = CheckIn()
+    work_clock = WorkClock()
+    _game_file = _os.path.join(_DATA_DIR, "game.json")
+    game_state = {}
+    if _os.path.exists(_game_file):
+        try:
+            with open(_game_file, "r", encoding="utf-8-sig") as _f:
+                game_state = _json.load(_f)
+        except (_json.JSONDecodeError, OSError):
+            pass
 
     MODE_TIERS = settings.get("blocking.tiers") or {
         "relaxed": [10, 30, 60, 120],
@@ -354,6 +371,98 @@ def run_app():
             pet.say("逃跑成功…下次别这样了")
         return True
 
+    # ---------- v4.0.1：互动玩法回调 ----------
+    def on_pet():
+        """摸头：好感 +1（冷却在 PetApp 里，防连点）。"""
+        pet_state.affinity = min(100.0, pet_state.affinity + 1.0)
+        pet_state.save()
+
+    def on_checkin():
+        """每日打卡：领币 + 连续签到奖励。"""
+        done, streak, total = checkin.status()
+        if done:
+            pet.say("今天已经打过卡啦，明天再来！")
+            return
+        r = checkin.do()
+        if r:
+            reward, streak, total = r
+            inventory.add_coins(reward)
+            logbook.log_event("checkin", f"第 {streak} 天连续打卡 +{reward:.0f} 币")
+            pet.celebrate(f"打卡成功！连续 {streak} 天，+{reward:.0f} 专注币！")
+
+    def on_feed(item):
+        """投喂：花币换好感。"""
+        price = int(item.get("price", 0))
+        aff = float(item.get("affinity", 0))
+        if not inventory.can_afford(price):
+            pet.say("金币不够啦，先去学习赚币吧！")
+            return
+        inventory.penalize(price)
+        pet_state.affinity = min(100.0, pet_state.affinity + aff)
+        pet_state.save()
+        logbook.log_event("feed", f"投喂 {item.get('name')} 好感+{aff:.0f}")
+        pet.celebrate(f"好好吃！好感 +{aff:.0f}！")
+
+    def on_work(minutes):
+        """打工：开始工作时钟（时间到自动结算，见 check_work）。"""
+        if work_clock.active:
+            pet.say("已经在打工啦，别急~")
+            return
+        if work_clock.start(minutes):
+            logbook.log_event("work_start", f"开始打工 {minutes} 分钟")
+            pet.say(f"我去上班啦！{minutes} 分钟后记得来领工资~")
+        else:
+            pet.say("现在不能打工哦")
+
+    def on_game_claim(score):
+        """小游戏结算：按汇率兑换专注币，每天上限防刷。返回实际入账。"""
+        if score <= 0:
+            return 0
+        rate = float(settings.get("game.coin_per_score", 1.0))
+        cap = float(settings.get("game.daily_cap", 50))
+        today = _dt.date.today().isoformat()
+        used = game_state.get("claimed", 0) if game_state.get("date") == today else 0
+        allow = int(min(score * rate, cap - used))
+        if allow <= 0:
+            return 0
+        inventory.add_coins(allow)
+        game_state["date"] = today
+        game_state["claimed"] = used + allow
+        try:
+            with open(_game_file, "w", encoding="utf-8") as _f:
+                _json.dump(game_state, _f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+        return allow
+
+    def on_open_game():
+        from ui import window_manager
+        from ui.game_window import GameWindow
+        window_manager.open(GameWindow(pet.root, on_claim=on_game_claim).root)
+
+    def check_work():
+        """主线程轮询工作时钟：更新头顶徽章、到期自动结算。"""
+        try:
+            if work_clock.active:
+                if work_clock.is_done():
+                    base = work_clock.finish()
+                    if base:
+                        coins = base * (1.0 + (pet_state.level - 1) * 0.05)
+                        inventory.add_coins(coins)
+                        logbook.log_event("work_done", f"打工完成 +{coins:.0f} 币")
+                        pet.set_work(False)
+                        pet.celebrate(f"下班啦！赚了 {coins:.0f} 专注币！")
+                else:
+                    pet.set_work(True, work_clock.remaining())
+            else:
+                pet.set_work(False)
+        except Exception as exc:
+            print("[work] 结算异常：", exc)
+        try:
+            pet.root.after(5000, check_work)
+        except Exception:
+            pass
+
     pet = PetApp(cfg, mode=pet_state.mode, inventory=inventory,
                  on_teach=on_teach,
                  on_start_study=on_start_study, on_end_study=on_end_study,
@@ -365,7 +474,9 @@ def run_app():
                  tray_enabled=True,
                  on_toggle_dnd=on_toggle_dnd,
                  on_toggle_mini=on_toggle_mini,
-                 on_open_help=on_open_help)
+                 on_open_help=on_open_help,
+                 on_pet=on_pet, on_checkin=on_checkin, on_feed=on_feed,
+                 on_work=on_work, on_open_game=on_open_game)
 
     sounds.set_muted(pet.dnd)   # 免打扰初始状态同步给音效
 
@@ -377,6 +488,11 @@ def run_app():
             save_config(cfg)
         except Exception:
             pass
+    # v4.0.1：启动工作结算轮询 + 今日未打卡提醒
+    pet.root.after(3000, check_work)
+    _done_today, _, _ = checkin.status()
+    if not _done_today:
+        pet.root.after(2500, lambda: pet.say("新的一天！记得右键「每日打卡」领金币哦~"))
 
     # 系统托盘（v3.5）：失败也不影响桌宠
     tray = None

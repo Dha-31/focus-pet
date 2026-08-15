@@ -44,7 +44,9 @@ class PetApp:
                  on_start_study=None, on_end_study=None, on_toggle_pomodoro=None,
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
                  on_open_report=None, on_open_settings=None, tray_enabled=False,
-                 on_toggle_dnd=None, on_toggle_mini=None, on_open_help=None):
+                 on_toggle_dnd=None, on_toggle_mini=None, on_open_help=None,
+                 on_pet=None, on_checkin=None, on_feed=None, on_work=None,
+                 on_open_game=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
@@ -52,6 +54,11 @@ class PetApp:
         self.on_toggle_dnd = on_toggle_dnd
         self.on_toggle_mini = on_toggle_mini
         self.on_open_help = on_open_help
+        self.on_pet = on_pet                  # 摸头（单击）
+        self.on_checkin = on_checkin          # 每日打卡
+        self.on_feed = on_feed                # 投喂
+        self.on_work = on_work                # 打工（工作时钟）
+        self.on_open_game = on_open_game      # 小游戏
         self.on_mode_change = on_mode_change
         self.on_exit = on_exit
         self.on_open_achievements = on_open_achievements
@@ -66,6 +73,9 @@ class PetApp:
         self.pomodoro_enabled = bool(config["pomodoro"]["enabled"])
         self.bubble_text = ""
         self._bubble_until = 0.0
+        self.work_active = False              # 打工中（v4.0.1）
+        self.work_remaining = 0.0
+        self._last_pet_ts = 0.0               # 摸头冷却
         self._t = 0.0
         self._blink_period = 3.0
         self.latest_info = None
@@ -302,9 +312,25 @@ class PetApp:
         self.root.geometry(f"+{wx + event.x_root - rx}+{wy + event.y_root - ry}")
 
     def _drag_end(self, event):
+        if self._drag:
+            rx, ry, _, _ = self._drag
+            # 位移很小 = 单击摸头（区分拖动窗口）
+            if abs(event.x_root - rx) < 6 and abs(event.y_root - ry) < 6:
+                self._pet_click()
         self._drag = None
         self._normal_pos = (self.root.winfo_x(), self.root.winfo_y())
         self._save_position()   # 位置记忆
+
+    def _pet_click(self):
+        """单击桌宠 = 摸头：好感 +1（冷却 3 秒防连点），宠物开心反馈。"""
+        now = time.time()
+        if now - self._last_pet_ts < 3.0:
+            return
+        self._last_pet_ts = now
+        if self.on_pet:
+            self.on_pet()
+        self.say("呼噜呼噜~ 好舒服！")
+        self.play_state("celebrate", 0.8)
 
     # ---------- 右键菜单 ----------
     def _build_menu(self):
@@ -351,6 +377,10 @@ class PetApp:
         menu.add_cascade(label="形象", menu=look_menu)
         # 娱乐
         fun_menu = tk.Menu(menu, tearoff=0)
+        fun_menu.add_command(label="每日打卡…", command=self._menu_checkin)
+        fun_menu.add_command(label="投喂…", command=self._menu_feed)
+        fun_menu.add_command(label="打工…", command=self._menu_work)
+        fun_menu.add_command(label="小游戏…", command=self._menu_game)
         fun_menu.add_command(label="商店…", command=self._open_shop)
         fun_menu.add_command(label="我的空间…", command=self._open_space)
         fun_menu.add_command(label="成就…", command=self._menu_achievements)
@@ -460,6 +490,72 @@ class PetApp:
             except Exception:
                 pass
 
+    # ---------- v4.0.1：打卡 / 投喂 / 打工 / 小游戏 ----------
+    def _choice_dialog(self, title, prompt, options):
+        """简易选择对话框：一排按钮，返回选中的值或 None。"""
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title)
+        dlg.geometry("520x320")
+        try:
+            dlg.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        from ui import window_manager
+        window_manager.open(dlg)
+        result = [None]
+        tk.Label(dlg, text=prompt, font=("Microsoft YaHei UI", 11), justify="left",
+                 wraplength=480).pack(padx=16, pady=(16, 10))
+        def choose(v):
+            result[0] = v
+            dlg.destroy()
+        for v, label in options:
+            tk.Button(dlg, text=label, font=("Microsoft YaHei UI", 11),
+                      command=lambda v=v: choose(v)).pack(fill="x", padx=40, pady=4)
+        tk.Button(dlg, text="取消", command=dlg.destroy).pack(pady=6)
+        dlg.grab_set()
+        self.root.wait_window(dlg)
+        return result[0]
+
+    def _menu_checkin(self):
+        if self.on_checkin:
+            self.on_checkin()
+
+    def _menu_feed(self):
+        if not self.on_feed:
+            return
+        from core import settings as _s
+        items = _s.settings.get("feed.items") or []
+        if not items:
+            self.say("没有食物了…")
+            return
+        opts = [(it.get("id"), f"{it.get('name')}（{it.get('price')} 币，+{it.get('affinity')} 好感）")
+                for it in items]
+        pick = self._choice_dialog("投喂", "选一个喂给宠物（花专注币加好感）：", opts)
+        if not pick:
+            return
+        for it in items:
+            if it.get("id") == pick:
+                self.on_feed(it)
+                return
+
+    def _menu_work(self):
+        if not self.on_work:
+            return
+        from core import settings as _s
+        opts = _s.settings.get("work.options") or [30, 60, 120]
+        rate = _s.settings.get("work.rate_per_min", 2.0)
+        picks = [(str(m), f"打工 {m} 分钟（约赚 {int(m * rate)} 币）") for m in opts]
+        pick = self._choice_dialog("打工", "让宠物去上班赚专注币（时间到自动结算，中途取消无奖励）：", picks)
+        if pick:
+            self.on_work(int(pick))
+
+    def _menu_game(self):
+        if self.on_open_game:
+            self.on_open_game()
+
+    def set_work(self, active, remaining=0):
+        """打工状态（main.py 轮询调用）：active + 剩余秒数。"""
+        self._queue.put(("work", (bool(active), float(remaining))))
     # ---------- 更换形象对话框 ----------
     def _open_skin_dialog(self):
         from ui import window_manager
@@ -696,6 +792,8 @@ class PetApp:
                         text, seconds = args
                         self.bubble_text = text
                         self._bubble_until = time.time() + seconds
+                elif kind == "work":
+                    self.work_active, self.work_remaining = args
                 elif kind == "mood":
                     self.mood = args[0]
                 elif kind == "state":
@@ -873,6 +971,14 @@ class PetApp:
             pet_renderer.draw_sleep_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
         if not self.mini:
             self._draw_bubble(c, w, h, meta, view_scale)
+        # 打工状态徽章（头顶 💼 + 剩余时间）
+        if self.work_active and not self.mini and meta:
+            _mins, _secs = divmod(max(0, int(self.work_remaining)), 60)
+            _label = f"💼 {_mins}:{_secs:02d}"
+            _fsb = max(9, min(14, int(8 * view_scale / 1.6)))
+            _ty = max(12, meta["box"][1] - 22)
+            c.create_text(cx, _ty, text=_label, fill="#4a3728",
+                          font=("Microsoft YaHei UI", _fsb, "bold"))
 
     def _draw_image(self, c, cx, cy, shake, state):
         w = c.winfo_width() or self.normal_size[0]

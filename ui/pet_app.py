@@ -1106,18 +1106,35 @@ class PetApp:
 
     @staticmethod
     def _wrap_bubble_text(measure, text, inner_w):
-        """按像素宽度逐字换行（与 Tk create_text 行为一致，气泡高度才准确）。"""
+        """按像素宽度均衡换行：行数尽量少，且每行均匀，避免末尾只剩 1-2 个字。"""
+        if not text:
+            return [""]
+        total = measure(text)
+        if total <= inner_w:
+            return [text]
+        n = max(2, int(math.ceil(total / inner_w)))   # 最少需要几行
+        target = total / n                             # 每行目标像素（≈均分）
         lines = []
         cur = ""
+        cur_w = 0.0
         for ch in text:
-            if not cur or measure(cur + ch) <= inner_w:
-                cur += ch
-            else:
+            cw = measure(ch)
+            if cur and cur_w + cw > target and len(lines) < n - 1:
                 lines.append(cur)
                 cur = ch
+                cur_w = cw
+            else:
+                cur += ch
+                cur_w += cw
         if cur:
             lines.append(cur)
-        return lines or [""]
+        # 保险：末行若仍太短（<3 字）且能并入前一行，则合并（避免孤字行）
+        if len(lines) > 1 and len(lines[-1]) < 3:
+            prev = lines[-2]
+            if measure(prev + lines[-1]) <= inner_w:
+                lines[-2] = prev + lines[-1]
+                lines.pop()
+        return lines
 
     @staticmethod
     def _pick_bubble_pos(w, h, bw, bh, cx, cy, sx0, sy0, sx1, sy1, hx, hy, hr, gap):

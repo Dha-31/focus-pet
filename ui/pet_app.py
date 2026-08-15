@@ -941,28 +941,30 @@ class PetApp:
         cy += jump
         # 宠物本体（记录"脑袋"与整体范围，气泡找不遮挡图像的空白位置）
         meta = None
+        pet_cx = cx
         img = self._image_for(state)
         if img is not None:
-            meta = self._draw_image(c, cx, cy + bob, shake, state)
+            meta = self._draw_image(c, pet_cx, cy + bob, shake, state)
         else:
             lean = self._look_dx * 3 if self._looking else 0.0
-            s_eff = view_scale * (1.0 + min(0.4, (self.level - 1) * 0.08))
+            s_eff = view_scale * 0.85 * (1.0 + min(0.4, (self.level - 1) * 0.08))
+            pet_cx = w * 0.44   # 程序化小猫稍微左移，给右侧气泡留空间
             pet_renderer.draw_procedural_pet(
-                c, cx + lean, cy + bob, shake, self.mood, self.level,
+                c, pet_cx + lean, cy + bob, shake, self.mood, self.level,
                 accessory=self.accessory, t=self._t, show_level=not self.mini,
                 look=(self._look_dx, self._look_dy) if self._looking else None,
                 view_scale=view_scale, napping=napping)
-            head = (cx + lean, cy + bob - 14 * s_eff, 26 * s_eff)
+            head = (pet_cx + lean, cy + bob - 14 * s_eff, 26 * s_eff)
             meta = {"head": head,
-                    "box": (cx + lean - 46 * s_eff, cy + bob - 58 * s_eff,
-                            cx + lean + 46 * s_eff, cy + bob + 52 * s_eff)}
-        # 状态特效（随迷你模式一起缩小）
+                    "box": (pet_cx + lean - 46 * s_eff, cy + bob - 58 * s_eff,
+                            pet_cx + lean + 46 * s_eff, cy + bob + 52 * s_eff)}
+        # 状态特效（围绕宠物本体）
         if state == "celebrate":
-            pet_renderer.draw_celebrate_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
+            pet_renderer.draw_celebrate_effects(c, pet_cx, cy + bob, self._t, r=40.0 * view_scale)
         elif state == "error":
-            pet_renderer.draw_error_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
+            pet_renderer.draw_error_effects(c, pet_cx, cy + bob, self._t, r=40.0 * view_scale)
         elif state == "sleep":
-            pet_renderer.draw_sleep_effects(c, cx, cy + bob, self._t, r=40.0 * view_scale)
+            pet_renderer.draw_sleep_effects(c, pet_cx, cy + bob, self._t, r=40.0 * view_scale)
         if not self.mini:
             self._draw_bubble(c, w, h, meta, view_scale)
         # 打工状态徽章（头顶 💼 + 剩余时间）
@@ -1005,29 +1007,69 @@ class PetApp:
         return {"head": (hx, hy, hr), "box": box}
 
     def _draw_bubble(self, c, w, h, meta=None, view_scale=1.0):
-        """说话气泡：固定脑袋右侧（用户偏好），Tk 原生换行、完整显示不截断不加省略号。"""
+        """说话气泡：完全在图像右边缘之外、脑袋右侧、均衡换行不截断无孤字。"""
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
-        fs = max(9, min(12, int(6.5 * view_scale)))
-        pad_x, pad_y = 12, 8
         if meta:
             hx, hy, hr = meta["head"]
+            ix1 = meta["box"][2]
         else:
             hx, hy, hr = w / 2.0, h / 2.0, w * 0.15
-        # 脑袋右侧可用宽度
-        right_space = max(60, w - (hx + hr) - 8)
-        max_text_w = max(40, int(right_space - 2 * pad_x))
-        # 先临时测文字实际尺寸（Tk 自动换行，完整显示）
-        tmp = c.create_text(0, 0, text=text, width=max_text_w, anchor="nw",
+            ix1 = float(w)
+        gap = 6
+        right_w = max(50, int(w - ix1 - gap - 4))
+        pad_x, pad_y = 12, 8
+        # 字号：保证每行至少 4 个中文字
+        try:
+            from tkinter import font as tkfont
+            f = tkfont.Font(family="Microsoft YaHei UI", size=12)
+            fs = 12
+            cw = f.measure("中")
+            while fs > 8 and (right_w - 2 * pad_x) < cw * 4:
+                fs -= 1
+                f = tkfont.Font(family="Microsoft YaHei UI", size=fs)
+                cw = f.measure("中")
+        except Exception:
+            f = None
+            fs = 9
+        max_text_w = max(32, int(right_w - 2 * pad_x))
+        # 均衡换行（每行像素均分，末尾无孤字）
+        if f is not None:
+            measure = f.measure
+        else:
+            measure = lambda s: len(s) * (fs + 2)
+        total = measure(text)
+        if total <= max_text_w:
+            lines = [text]
+        else:
+            n = max(2, int(math.ceil(total / max_text_w)))
+            target = total / n
+            lines = []
+            cur = ""
+            cur_w = 0.0
+            for ch in text:
+                cw = measure(ch)
+                if cur and cur_w + cw > target and len(lines) < n - 1:
+                    lines.append(cur)
+                    cur = ch
+                    cur_w = cw
+                else:
+                    cur += ch
+                    cur_w += cw
+            if cur:
+                lines.append(cur)
+        display_text = "\n".join(lines)
+        # 临时测实际尺寸
+        tmp = c.create_text(0, 0, text=display_text, anchor="nw",
                             font=("Microsoft YaHei UI", fs))
         tx0, ty0, tx1, ty1 = c.bbox(tmp)
         c.delete(tmp)
         bw = int(tx1 - tx0 + 2 * pad_x)
         bh = int(ty1 - ty0 + 2 * pad_y)
-        # 位置：脑袋右侧，垂直居中于脑袋
-        bx = max(4, int(hx + hr + 4))
-        by = max(4, int(min(h - bh - 4, hy - bh / 2.0)))
+        # 位置：图像右边缘之外，垂直居中于脑袋
+        bx = int(ix1 + gap)
+        by = int(max(4, min(h - bh - 4, hy - bh / 2.0)))
         # 圆角白底气泡
         r = 10
         c.create_oval(bx, by, bx + 2 * r, by + 2 * r, fill="white", outline="#dddddd")
@@ -1036,6 +1078,6 @@ class PetApp:
         c.create_oval(bx + bw - 2 * r, by + bh - 2 * r, bx + bw, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx + r, by, bx + bw - r, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx, by + r, bx + bw, by + bh - r, fill="white", outline="#dddddd")
-        c.create_text(bx + pad_x, by + pad_y, text=text, width=max_text_w,
+        c.create_text(bx + pad_x, by + pad_y, text=display_text,
                       anchor="nw", fill="#333333",
                       font=("Microsoft YaHei UI", fs))

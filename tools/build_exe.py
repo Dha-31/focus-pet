@@ -34,10 +34,20 @@ def main():
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'models')}{os.pathsep}models",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'release')}{os.pathsep}release",
     ]
+    import importlib.util as _iu
     if not full:
         # 体验版：排除重型 AI 依赖（它们打包易失败、体积巨大；代码已优雅降级）
         for mod in ("mediapipe", "cv2", "rapidocr_onnxruntime", "sklearn", "scipy"):
             cmd += ["--exclude-module", mod]
+    else:
+        # 完整版：mediapipe/rapidocr 没有官方 PyInstaller hook，需显式收集
+        for mod in ("mediapipe", "rapidocr_onnxruntime"):
+            try:
+                if _iu.find_spec(mod):
+                    cmd += ["--collect-all", mod]
+                    print(f"[build] 已包含 {mod}（完整版）")
+            except Exception:
+                pass
     # 动态导入的工具模块（PyInstaller 可能漏）
     cmd += ["--hidden-import", "tools.make_skin", "--hidden-import", "tools.theme_scaffold",
             "--hidden-import", "tools.validate_theme"]

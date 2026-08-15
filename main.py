@@ -324,6 +324,10 @@ def run_app():
         from ui.settings_editor import SettingsEditor
         window_manager.open(SettingsEditor(pet.root, pet=pet).root)
 
+    def on_open_rules():
+        from ui import window_manager
+        from ui.rules_window import RulesWindow
+        window_manager.open(RulesWindow(pet.root).root)
     def on_open_help(welcome=False):
         from ui import window_manager
         from ui.help_window import HelpWindow
@@ -439,7 +443,7 @@ def run_app():
                  on_toggle_mini=on_toggle_mini,
                  on_open_help=on_open_help,
                  on_pet=on_pet, on_checkin=on_checkin, on_feed=on_feed,
-                 on_work=on_work)
+                 on_work=on_work, on_open_rules=on_open_rules)
 
     sounds.set_muted(pet.dnd)   # 免打扰初始状态同步给音效
 

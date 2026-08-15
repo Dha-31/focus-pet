@@ -45,7 +45,8 @@ class PetApp:
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
                  on_open_report=None, on_open_settings=None, tray_enabled=False,
                  on_toggle_dnd=None, on_toggle_mini=None, on_open_help=None,
-                 on_pet=None, on_checkin=None, on_feed=None, on_work=None):
+                 on_pet=None, on_checkin=None, on_feed=None, on_work=None,
+                 on_open_rules=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
         self.on_end_study = on_end_study
@@ -53,6 +54,7 @@ class PetApp:
         self.on_toggle_dnd = on_toggle_dnd
         self.on_toggle_mini = on_toggle_mini
         self.on_open_help = on_open_help
+        self.on_open_rules = on_open_rules      # 黑白名单设置
         self.on_pet = on_pet                  # 摸头（单击）
         self.on_checkin = on_checkin          # 每日打卡
         self.on_feed = on_feed                # 投喂
@@ -386,6 +388,7 @@ class PetApp:
         # 系统
         sys_menu = tk.Menu(menu, tearoff=0)
         sys_menu.add_command(label="设置…", command=self._menu_settings)
+        sys_menu.add_command(label="黑白名单…", command=self._menu_rules)
         sys_menu.add_command(label="使用帮助…", command=self._menu_help)
         sys_menu.add_command(label="这个是学习用的！", command=self._menu_teach)
         if self.tray_enabled:
@@ -455,6 +458,10 @@ class PetApp:
     def _menu_help(self):
         if self.on_open_help:
             self.on_open_help()
+
+    def _menu_rules(self):
+        if self.on_open_rules:
+            self.on_open_rules()
 
     # ---------- 商店 / 个人空间 ----------
     def _open_shop(self):

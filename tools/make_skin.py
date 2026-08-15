@@ -65,6 +65,16 @@ def remove_white_bg(img):
     return img
 
 
+def _rembg_model_dir():
+    """rembg 模型目录（U2NET_HOME 或 ~/.u2net）。"""
+    return os.environ.get("U2NET_HOME") or os.path.join(os.path.expanduser("~"), ".u2net")
+
+
+def rembg_model_ready(name="birefnet-general.onnx"):
+    """AI 抠图模型是否已下载（>1MB 视为就绪）。"""
+    p = os.path.join(_rembg_model_dir(), name)
+    return os.path.exists(p) and os.path.getsize(p) > 1_000_000
+
 _REMBG_SESSION = None
 
 
@@ -75,20 +85,32 @@ def _rembg_session():
         return _REMBG_SESSION
     try:
         from rembg import new_session
+        if not rembg_model_ready("birefnet-general.onnx"):
+            print("[make_skin] 首次 AI 抠图需联网下载约 300MB BiRefNet 模型，网慢会久。")
+            print("[make_skin] 建议先运行: python tools/fetch_birefnet.py 提前下载（带进度条）")
+            print("[make_skin] 或跳过 AI 抠图: python tools/make_skin.py --no-rembg <图片>")
         try:
             _REMBG_SESSION = new_session("birefnet-general")  # 高质量：头发/边缘更干净
-            print("[make_skin] 使用 BiRefNet 高质量抠图模型（首次使用需下载约 300MB，仅一次）")
+            print("[make_skin] 使用 BiRefNet 高质量抠图模型")
         except Exception:
+            if not rembg_model_ready("u2net.onnx"):
+                print("[make_skin] BiRefNet 不可用，回退默认 u2net 模型（首次也需联网下载约 170MB）")
+            else:
+                print("[make_skin] BiRefNet 不可用，回退默认 u2net 模型")
             _REMBG_SESSION = new_session()                    # 回退默认 u2net
-            print("[make_skin] BiRefNet 不可用，回退默认 u2net 模型")
     except Exception as exc:
         print("[make_skin] rembg 模型初始化失败：", exc)
         _REMBG_SESSION = False
     return _REMBG_SESSION
 
 
-def build_skin(src, out_path):
-    if HAS_REMBG:
+def build_skin(src, out_path, prefer="auto"):
+    """把图片做成皮肤。
+
+    prefer: "auto"=rembg 优先 / "rembg"=强制 AI 抠图 / "pillow"=跳过 AI 快速去底。
+    返回使用的方法: rembg / pillow / copy。
+    """
+    if prefer != "pillow" and HAS_REMBG:
         try:
             from rembg import remove as _remove
             sess = _rembg_session()
@@ -110,19 +132,29 @@ def build_skin(src, out_path):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("用法: python tools/make_skin.py <图片路径> [皮肤名]")
+    args = list(sys.argv[1:])
+    prefer = "auto"
+    if "--no-rembg" in args:
+        prefer = "pillow"
+        args.remove("--no-rembg")
+    if "--prefer" in args:
+        i = args.index("--prefer")
+        if i + 1 < len(args):
+            prefer = args[i + 1]
+            del args[i:i + 2]
+    if not args:
+        print("用法: python tools/make_skin.py <图片路径> [皮肤名] [--no-rembg|--prefer auto|rembg|pillow]")
         sys.exit(1)
-    src = sys.argv[1]
+    src = args[0]
     if not os.path.exists(src):
         print(f"找不到图片: {src}")
         sys.exit(1)
-    name = sys.argv[2] if len(sys.argv) > 2 else os.path.splitext(os.path.basename(src))[0]
+    name = args[1] if len(args) > 1 else os.path.splitext(os.path.basename(src))[0]
     out_dir = os.path.join(SKINS_DIR, name)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "pet.png")
 
-    method = build_skin(src, out_path)
+    method = build_skin(src, out_path, prefer=prefer)
     if method == "rembg":
         print(f"已生成（rembg AI 抠图）: {out_path}")
     elif method == "pillow":

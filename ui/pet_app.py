@@ -556,8 +556,19 @@ class PetApp:
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, "pet.png")
         try:
-            from tools.make_skin import build_skin
-            method = build_skin(path, out_path)
+            from tools.make_skin import build_skin, HAS_REMBG, rembg_model_ready
+            prefer = "auto"
+            if HAS_REMBG and not rembg_model_ready():
+                from tkinter import messagebox
+                go = messagebox.askyesno(
+                    "AI 抠图模型未下载",
+                    "首次 AI 抠图需要联网下载约 300MB 模型（只需一次），网慢可能要等几分钟。\n\n"
+                    "选“是”：现在联网下载（以后一直可用）\n"
+                    "选“否”：先用快速方式去底（白色背景）",
+                    parent=parent,
+                )
+                prefer = "auto" if go else "pillow"
+            method = build_skin(path, out_path, prefer=prefer)
         except Exception:
             shutil.copy(path, out_path)
             method = "copy"
@@ -897,63 +908,161 @@ class PetApp:
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
-        # 大小克制：按文字实际宽度自适应，随图像缩放但上限适中
-        scale = max(0.7, min(1.6, view_scale))
-        font_size = max(8, min(14, int(9 * scale)))
-        try:
-            from tkinter import font as tkfont
-            _f = tkfont.Font(family="Microsoft YaHei UI", size=font_size)
-            max_w = max(80, int(w * 0.45))            # 不超过窗口 45%
-            bw = min(max_w, int(_f.measure(text) + 22 * scale))
-            bw = max(56, bw)
-            inner_w = max(40, bw - 18)
-            line_h = _f.metrics("linespace")
-            lines = max(1, int((_f.measure(text) + inner_w - 1) // inner_w))
-            bh = lines * line_h + int(10 * scale)
-        except Exception:
-            bw = int(min(max(80, int(w * 0.4)), 240))
-            bh = 40
-        # 角色范围（气泡避让，不挡图像）
+        # 角色范围：图像 box（避让用） + 脑袋圆（严格不遮）
         if meta:
             hx, hy, hr = meta["head"]
             ix0, iy0, ix1, iy1 = meta["box"]
-            cx, cy = hx, hy
         else:
-            hx = hy = hr = 0
-            ix0 = iy0 = 0; ix1 = w; iy1 = h
-            cx, cy = w / 2, h / 2
+            hx = hy = hr = 0.0
+            ix0 = iy0 = 0.0
+            ix1, iy1 = float(w), float(h)
         gap = 6
-        candidates = [
-            (ix1 + gap, cy - bh / 2),            # 右
-            (ix0 - gap - bw, cy - bh / 2),       # 左
-            (cx - bw / 2, iy0 - gap - bh),       # 上
-            (cx - bw / 2, iy1 + gap),            # 下
-        ]
-        bx = by = None
-        for x, y in candidates:
+        # 图像边缘常是透明/空白，避让时收缩 6%，气泡能贴近但又不压到实体
+        sx0 = ix0 + (ix1 - ix0) * 0.06
+        sy0 = iy0 + (iy1 - iy0) * 0.06
+        sx1 = ix1 - (ix1 - ix0) * 0.06
+        sy1 = iy1 - (iy1 - iy0) * 0.06
+        cx, cy = (hx if meta else w / 2.0), (hy if meta else h / 2.0)
+
+        # 字号档：最大 12pt（用户偏好），随窗口/图像缩小而缩小，放不下自动降档
+        ideal_fs = max(8, min(12, int(6.5 * view_scale)))
+        fs_options = sorted(set(list(range(ideal_fs, 8, -2)) + [9]), reverse=True)
+
+        max_w = max(90, int(w * 0.55))
+        try:
+            from tkinter import font as tkfont
+        except Exception:
+            tkfont = None
+
+        last = None
+        # 双层自适应：字号优先（随窗口变大与图像协调），宽度多档收缩（窄空间也能塞进侧边）
+        for fs in fs_options:
+            try:
+                f = tkfont.Font(family="Microsoft YaHei UI", size=fs)
+                line_h = f.metrics("linespace")
+                measure = f.measure
+            except Exception:
+                f = None
+                line_h = max(14, fs + 6)
+                measure = lambda s: len(s) * (fs + 2)
+            pad_x = 12 + fs
+            pad_y = 10 + fs
+            for ratio in (0.5, 0.34):
+                max_w = max(80, int(w * ratio))
+                min_line_w = max(40, int(fs * 1.35 * 4))   # 每行至少放 4 个中文字符，避免两字就换行
+                inner_w = max(max(40, max_w - pad_x), min_line_w)
+                lines = self._wrap_bubble_text(measure, text, inner_w)
+                max_lines = max(2, int((h * 0.55) / max(1, line_h)))
+                if len(lines) > max_lines:
+                    lines = lines[:max_lines]
+                    last_line = lines[-1]
+                    while last_line and measure(last_line) > inner_w - 8:
+                        last_line = last_line[:-1]
+                    lines[-1] = last_line + "…"
+                bw = max(40, max(measure(x) for x in lines) + pad_x)
+                bh = len(lines) * line_h + pad_y
+                last = (lines, fs, bw, bh)
+                pos = self._pick_bubble_pos(w, h, bw, bh, cx, cy,
+                                            sx0, sy0, sx1, sy1, hx, hy, hr, gap)
+                if pos is not None:
+                    self._paint_bubble(c, pos, last)
+                    return
+        # 全部放不下：兜底——最小字号贴脑袋上方，宁可与图像边缘轻微重叠也不遮脑袋
+        if last is not None:
+            lines, fs, bw, bh = last
+            top_space = max(0, hy - hr - gap - 4)
+            if bh > top_space:
+                # 用最小字号把文本截断到能放进脑袋上方的行数（绝不遮脑袋）
+                fs = 9
+                try:
+                    f9 = tkfont.Font(family="Microsoft YaHei UI", size=fs)
+                    line_h = f9.metrics("linespace")
+                    measure = f9.measure
+                except Exception:
+                    line_h = 15
+                    measure = lambda s: len(s) * 11
+                pad_x = 12 + fs
+                inner_w = max(max(40, max(80, int(w * 0.34)) - pad_x), max(40, int(fs * 1.35 * 4)))
+                lines = self._wrap_bubble_text(measure, text, inner_w)
+                max_lines = max(1, int((top_space - (10 + fs)) / max(1, line_h)))
+                if len(lines) > max_lines:
+                    lines = lines[:max_lines]
+                    last_line = lines[-1]
+                    while last_line and measure(last_line) > inner_w - 8:
+                        last_line = last_line[:-1]
+                    lines[-1] = last_line + "…"
+                bw = max(40, max(measure(x) for x in lines) + pad_x)
+                bh = len(lines) * line_h + 10 + fs
+                last = (lines, fs, bw, bh)
+            bx = max(4, min(cx - bw / 2, w - bw - 4))
+            by = max(4, hy - hr - gap - bh)
+            self._paint_bubble(c, (bx, by, "bottom"), last)
+
+    @staticmethod
+    def _wrap_bubble_text(measure, text, inner_w):
+        """按像素宽度逐字换行（与 Tk create_text 行为一致，气泡高度才准确）。"""
+        lines = []
+        cur = ""
+        for ch in text:
+            if not cur or measure(cur + ch) <= inner_w:
+                cur += ch
+            else:
+                lines.append(cur)
+                cur = ch
+        if cur:
+            lines.append(cur)
+        return lines or [""]
+
+    @staticmethod
+    def _pick_bubble_pos(w, h, bw, bh, cx, cy, sx0, sy0, sx1, sy1, hx, hy, hr, gap):
+        """四方向找第一个不挡角色（图像收缩盒 + 脑袋圆）的位置；放不下返回 None。"""
+        candidates = (
+            (sx1 + gap, cy - bh / 2.0, "left"),     # 右（贴脑袋，尾巴朝左）
+            (sx0 - gap - bw, cy - bh / 2.0, "right"),
+            (cx - bw / 2.0, sy0 - gap - bh, "bottom"),
+            (cx - bw / 2.0, sy1 + gap, "top"),
+        )
+        for x, y, tail in candidates:
             x = max(4, min(x, w - bw - 4))
             y = max(4, min(y, h - bh - 4))
-            # 不与角色范围重叠
-            if not (x < ix1 and x + bw > ix0 and y < iy1 and y + bh > iy0):
-                bx, by = x, y
-                break
-        if bx is None:   # 都重叠/放不下 → 就近 clamp（宁可小重叠也不出窗口）
-            bx = max(4, min(candidates[0][0], w - bw - 4))
-            by = max(4, min(candidates[0][1], h - bh - 4))
-        r = max(6, int(9 * scale))
-        # 圆角气泡
+            if PetApp._bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
+                continue
+            return (x, y, tail)
+        return None
+
+    @staticmethod
+    def _bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
+        """气泡矩形是否与图像收缩盒或脑袋圆重叠。"""
+        if not (x + bw <= sx0 or x >= sx1 or y + bh <= sy0 or y >= sy1):
+            return True
+        if hr > 0:
+            nx = max(x, min(hx, x + bw))
+            ny = max(y, min(hy, y + bh))
+            if (hx - nx) ** 2 + (hy - ny) ** 2 < hr * hr:
+                return True
+        return False
+
+    @staticmethod
+    def _paint_bubble(c, pos, last):
+        """画圆角气泡 + 尾巴（朝向角色）+ 多行文字。"""
+        bx, by, tail = pos
+        lines, fs, bw, bh = last
+        r = max(6, int(8 + fs * 0.6))
         c.create_oval(bx, by, bx + 2 * r, by + 2 * r, fill="white", outline="#dddddd")
         c.create_oval(bx + bw - 2 * r, by, bx + bw, by + 2 * r, fill="white", outline="#dddddd")
         c.create_oval(bx, by + bh - 2 * r, bx + 2 * r, by + bh, fill="white", outline="#dddddd")
         c.create_oval(bx + bw - 2 * r, by + bh - 2 * r, bx + bw, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx + r, by, bx + bw - r, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx, by + r, bx + bw, by + bh - r, fill="white", outline="#dddddd")
-        # 小尾巴（朝角色方向）
-        if bx + bw / 2 > cx:
-            c.create_polygon(bx + 8, by + bh - 2, bx + 16, by + bh + 10,
-                             bx + 26, by + bh - 2, fill="white", outline="")
-        else:
-            c.create_polygon(bx + bw - 26, by + bh - 2, bx + bw - 16, by + bh + 10,
-                             bx + bw - 8, by + bh - 2, fill="white", outline="")
-        c.create_text(bx + bw / 2, by + bh / 2, text=text, width=inner_w,
-                      fill="#333333", font=("Microsoft YaHei UI", font_size))
+        mcx = bx + bw / 2.0
+        mcy = by + bh / 2.0
+        if tail == "left":
+            c.create_polygon(bx + 6, mcy - 6, bx - 8, mcy, bx + 6, mcy + 6, fill="white", outline="")
+        elif tail == "right":
+            c.create_polygon(bx + bw - 6, mcy - 6, bx + bw + 8, mcy, bx + bw - 6, mcy + 6, fill="white", outline="")
+        elif tail == "bottom":
+            c.create_polygon(mcx - 8, by + bh - 2, mcx, by + bh + 10, mcx + 8, by + bh - 2, fill="white", outline="")
+        else:  # top
+            c.create_polygon(mcx - 8, by + 2, mcx, by - 10, mcx + 8, by + 2, fill="white", outline="")
+        c.create_text(mcx, mcy, text="\n".join(lines), fill="#333333",
+                      font=("Microsoft YaHei UI", fs))

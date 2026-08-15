@@ -34,7 +34,7 @@ from ui.skin_face import detect_face_meta
 
 TRANSPARENT_BG = "#010203"
 DESIGN_SIZE = 170          # 猫画稿的设计基准（窗口 170 时猫占满；窗口变大猫等比放大，矢量不糊）
-NORMAL_SIZE = (340, 340)   # 默认桌宠窗口大小（调整大小窗口可改）
+NORMAL_SIZE = (480, 340)   # 默认桌宠窗口大小（加宽给右侧气泡留空间）
 MINI_SIZE = (90, 90)
 BLOCK_SIZE = (460, 320)
 
@@ -912,7 +912,7 @@ class PetApp:
         cx, cy = w / 2.0, h / 2.0
         state = self.sm.current()
         view_scale = (self.mini_size[0] / DESIGN_SIZE if self.mini
-                      else w / DESIGN_SIZE)
+                      else min(w, h) / DESIGN_SIZE)
         # 专注久了打盹：呼吸变缓、眼睛半闭（对图片皮肤只做呼吸缓动）
         napping = (self._activity == "study" and self._focus_streak >= 600
                    and self.mood == 0 and not self.block_mode and not self.sm.sleeping)
@@ -947,8 +947,7 @@ class PetApp:
             meta = self._draw_image(c, pet_cx, cy + bob, shake, state)
         else:
             lean = self._look_dx * 3 if self._looking else 0.0
-            s_eff = view_scale * 0.85 * (1.0 + min(0.4, (self.level - 1) * 0.08))
-            pet_cx = w * 0.44   # 程序化小猫稍微左移，给右侧气泡留空间
+            s_eff = view_scale * (1.0 + min(0.4, (self.level - 1) * 0.08))
             pet_renderer.draw_procedural_pet(
                 c, pet_cx + lean, cy + bob, shake, self.mood, self.level,
                 accessory=self.accessory, t=self._t, show_level=not self.mini,
@@ -1026,14 +1025,16 @@ class PetApp:
             f = tkfont.Font(family="Microsoft YaHei UI", size=12)
             fs = 12
             cw = f.measure("中")
-            while fs > 8 and (right_w - 2 * pad_x) < cw * 4:
+            while fs > 8 and (right_w - 2 * pad_x - cw) < cw * 4:
                 fs -= 1
                 f = tkfont.Font(family="Microsoft YaHei UI", size=fs)
                 cw = f.measure("中")
         except Exception:
             f = None
             fs = 9
-        max_text_w = max(32, int(right_w - 2 * pad_x))
+            cw = 12
+        # 预留一个中文字宽，避免气泡右缘超出窗口
+        max_text_w = max(32, int(right_w - 2 * pad_x - cw))
         # 均衡换行（每行像素均分，末尾无孤字）
         if f is not None:
             measure = f.measure
@@ -1043,22 +1044,27 @@ class PetApp:
         if total <= max_text_w:
             lines = [text]
         else:
+            # 迭代均衡换行：每行都不超过 max_text_w，且行数尽量少、无孤字
             n = max(2, int(math.ceil(total / max_text_w)))
-            target = total / n
-            lines = []
-            cur = ""
-            cur_w = 0.0
-            for ch in text:
-                cw = measure(ch)
-                if cur and cur_w + cw > target and len(lines) < n - 1:
+            while True:
+                target = total / n
+                lines = []
+                cur = ""
+                cur_w = 0.0
+                for ch in text:
+                    cw = measure(ch)
+                    if cur and cur_w + cw > target and len(lines) < n - 1:
+                        lines.append(cur)
+                        cur = ch
+                        cur_w = cw
+                    else:
+                        cur += ch
+                        cur_w += cw
+                if cur:
                     lines.append(cur)
-                    cur = ch
-                    cur_w = cw
-                else:
-                    cur += ch
-                    cur_w += cw
-            if cur:
-                lines.append(cur)
+                if all(measure(l) <= max_text_w for l in lines):
+                    break
+                n += 1
         display_text = "\n".join(lines)
         # 临时测实际尺寸
         tmp = c.create_text(0, 0, text=display_text, anchor="nw",

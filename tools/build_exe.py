@@ -50,7 +50,7 @@ def main():
                 pass
     # 动态导入的工具模块（PyInstaller 可能漏）
     cmd += ["--hidden-import", "tools.make_skin", "--hidden-import", "tools.theme_scaffold",
-            "--hidden-import", "tools.validate_theme"]
+            "--hidden-import", "tools.validate_theme", "--hidden-import", "ui.rules_window"]
     # AI 抠图（rembg）：已安装则打包进客户端（体积大但效果好）
     try:
         import importlib.util

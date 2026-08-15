@@ -35,6 +35,13 @@ class RulesWindow:
         self.root.geometry("900x720")
         style_window(self.root)
         self._build()
+        # 确保窗口可正常输入：置前 + 聚焦第一个文本框
+        try:
+            self.root.lift()
+            self.root.focus_force()
+            self.root.after(100, lambda: self._bl_urls.focus_set())
+        except Exception:
+            pass
 
     @staticmethod
     def _lines(text_widget):

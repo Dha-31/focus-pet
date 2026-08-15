@@ -1005,183 +1005,30 @@ class PetApp:
         return {"head": (hx, hy, hr), "box": box}
 
     def _draw_bubble(self, c, w, h, meta=None, view_scale=1.0):
+        """说话气泡（借鉴 VPet MessageBar）：固定窗口顶部、Tk 原生换行、完整显示不截断、不加省略号、不遮角色。"""
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
-        # 角色范围：图像 box（避让用） + 脑袋圆（严格不遮）
-        if meta:
-            hx, hy, hr = meta["head"]
-            ix0, iy0, ix1, iy1 = meta["box"]
-        else:
-            hx = hy = hr = 0.0
-            ix0 = iy0 = 0.0
-            ix1, iy1 = float(w), float(h)
-        gap = 6
-        # 用图像原始边界避让：气泡必须完全在图像外，绝不压到角色实体
-        sx0, sy0, sx1, sy1 = ix0, iy0, ix1, iy1
-        cx, cy = (hx if meta else w / 2.0), (hy if meta else h / 2.0)
-
-        # 字号档：最大 12pt（用户偏好），随窗口/图像缩小而缩小，放不下自动降档
-        ideal_fs = max(8, min(12, int(6.5 * view_scale)))
-        fs_options = sorted(set(list(range(ideal_fs, 8, -2)) + [9]), reverse=True)
-
-        max_w = max(90, int(w * 0.55))
-        try:
-            from tkinter import font as tkfont
-        except Exception:
-            tkfont = None
-
-        last = None
-        # 双层自适应：字号优先（随窗口变大与图像协调），宽度多档收缩（窄空间也能塞进侧边）
-        for fs in fs_options:
-            try:
-                f = tkfont.Font(family="Microsoft YaHei UI", size=fs)
-                line_h = f.metrics("linespace")
-                measure = f.measure
-            except Exception:
-                f = None
-                line_h = max(14, fs + 6)
-                measure = lambda s: len(s) * (fs + 2)
-            pad_x = 12 + fs
-            pad_y = 10 + fs
-            for ratio in (0.5, 0.34, 0.22):
-                max_w = max(80, int(w * ratio))
-                min_line_w = max(40, int(fs * 1.35 * 4))   # 每行至少放 4 个中文字符，避免两字就换行
-                inner_w = max(max(40, max_w - pad_x), min_line_w)
-                lines = self._wrap_bubble_text(measure, text, inner_w)
-                max_lines = max(2, int((h * 0.55) / max(1, line_h)))
-                if len(lines) > max_lines:
-                    lines = lines[:max_lines]
-                    last_line = lines[-1]
-                    while last_line and measure(last_line) > inner_w - 8:
-                        last_line = last_line[:-1]
-                    lines[-1] = last_line + "…"
-                bw = max(40, max(measure(x) for x in lines) + pad_x)
-                bh = len(lines) * line_h + pad_y
-                last = (lines, fs, bw, bh)
-                pos = self._pick_bubble_pos(w, h, bw, bh, cx, cy,
-                                            sx0, sy0, sx1, sy1, hx, hy, hr, gap)
-                if pos is not None:
-                    self._paint_bubble(c, pos, last)
-                    return
-        # 全部放不下：兜底——最小字号放图像上方，截断到能放下，绝不遮图像/脑袋
-        if last is not None:
-            lines, fs, bw, bh = last
-            top_space = max(0, sy0 - gap - 4)
-            if bh > top_space:
-                fs = 9
-                try:
-                    f9 = tkfont.Font(family="Microsoft YaHei UI", size=fs)
-                    line_h = f9.metrics("linespace")
-                    measure = f9.measure
-                except Exception:
-                    line_h = 15
-                    measure = lambda s: len(s) * 11
-                pad_x = 12 + fs
-                inner_w = max(max(40, max(80, int(w * 0.22)) - pad_x), max(40, int(fs * 1.35 * 4)))
-                lines = self._wrap_bubble_text(measure, text, inner_w)
-                max_lines = max(1, int((top_space - (10 + fs)) / max(1, line_h)))
-                if len(lines) > max_lines:
-                    lines = lines[:max_lines]
-                    last_line = lines[-1]
-                    while last_line and measure(last_line) > inner_w - 8:
-                        last_line = last_line[:-1]
-                    lines[-1] = last_line + "…"
-                bw = max(40, max(measure(x) for x in lines) + pad_x)
-                bh = len(lines) * line_h + 10 + fs
-                last = (lines, fs, bw, bh)
-            bx = max(4, min(cx - bw / 2, w - bw - 4))
-            by = max(4, sy0 - gap - bh)
-            self._paint_bubble(c, (bx, by, "bottom"), last)
-
-    @staticmethod
-    def _wrap_bubble_text(measure, text, inner_w):
-        """按像素宽度均衡换行：行数尽量少，且每行均匀，避免末尾只剩 1-2 个字。"""
-        if not text:
-            return [""]
-        total = measure(text)
-        if total <= inner_w:
-            return [text]
-        n = max(2, int(math.ceil(total / inner_w)))   # 最少需要几行
-        target = total / n                             # 每行目标像素（≈均分）
-        lines = []
-        cur = ""
-        cur_w = 0.0
-        for ch in text:
-            cw = measure(ch)
-            if cur and cur_w + cw > target and len(lines) < n - 1:
-                lines.append(cur)
-                cur = ch
-                cur_w = cw
-            else:
-                cur += ch
-                cur_w += cw
-        if cur:
-            lines.append(cur)
-        # 保险：末行若仍太短（<3 字）且能并入前一行，则合并（避免孤字行）
-        if len(lines) > 1 and len(lines[-1]) < 3:
-            prev = lines[-2]
-            if measure(prev + lines[-1]) <= inner_w:
-                lines[-2] = prev + lines[-1]
-                lines.pop()
-        return lines
-
-    @staticmethod
-    def _pick_bubble_pos(w, h, bw, bh, cx, cy, sx0, sy0, sx1, sy1, hx, hy, hr, gap):
-        """优先图像右侧，依次 右→左→上；绝不挡图像实体、绝不遮脑袋、不落脚底。"""
-        def clamp(x, y):
-            return max(4, min(x, w - bw - 4)), max(4, min(y, h - bh - 4))
-
-        candidates = (
-            (sx1 + gap, cy - bh / 2.0, "left"),       # 右（贴脑袋）
-            (sx0 - gap - bw, cy - bh / 2.0, "right"), # 左
-            (cx - bw / 2.0, sy0 - gap - bh, "bottom"), # 上
-        )
-        for x, y, tail in candidates:
-            x, y = clamp(x, y)
-            if PetApp._bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
-                continue
-            return (x, y, tail)
-        return None
-
-    @staticmethod
-    def _bubble_head_hit(x, y, bw, bh, hx, hy, hr):
-        """气泡矩形是否遮到脑袋圆。"""
-        if hr > 0:
-            nx = max(x, min(hx, x + bw))
-            ny = max(y, min(hy, y + bh))
-            if (hx - nx) ** 2 + (hy - ny) ** 2 < hr * hr:
-                return True
-        return False
-
-    @staticmethod
-    def _bubble_rect_overlaps(x, y, bw, bh, sx0, sy0, sx1, sy1, hx, hy, hr):
-        """气泡矩形是否与图像收缩盒重叠，或遮到脑袋圆。"""
-        if not (x + bw <= sx0 or x >= sx1 or y + bh <= sy0 or y >= sy1):
-            return True
-        return PetApp._bubble_head_hit(x, y, bw, bh, hx, hy, hr)
-
-    @staticmethod
-    def _paint_bubble(c, pos, last):
-        """画圆角气泡 + 尾巴（朝向角色）+ 多行文字。"""
-        bx, by, tail = pos
-        lines, fs, bw, bh = last
-        r = max(6, int(8 + fs * 0.6))
+        fs = max(9, min(13, int(6.5 * view_scale)))
+        bx, by = 4, 4
+        pad_x, pad_y = 12, 8
+        max_text_w = max(40, w - 2 * pad_x - 8)
+        # 先临时创建文字，用 bbox 量出真实尺寸（Tk 按 width 自动换行，不截断）
+        tmp = c.create_text(bx + pad_x, by + pad_y, text=text, width=max_text_w,
+                            anchor="nw", fill="#333333",
+                            font=("Microsoft YaHei UI", fs))
+        tx0, ty0, tx1, ty1 = c.bbox(tmp)
+        c.delete(tmp)
+        bw = int(tx1 - tx0 + 2 * pad_x)
+        bh = int(ty1 - ty0 + 2 * pad_y)
+        # 圆角白底气泡
+        r = 10
         c.create_oval(bx, by, bx + 2 * r, by + 2 * r, fill="white", outline="#dddddd")
         c.create_oval(bx + bw - 2 * r, by, bx + bw, by + 2 * r, fill="white", outline="#dddddd")
         c.create_oval(bx, by + bh - 2 * r, bx + 2 * r, by + bh, fill="white", outline="#dddddd")
         c.create_oval(bx + bw - 2 * r, by + bh - 2 * r, bx + bw, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx + r, by, bx + bw - r, by + bh, fill="white", outline="#dddddd")
         c.create_rectangle(bx, by + r, bx + bw, by + bh - r, fill="white", outline="#dddddd")
-        mcx = bx + bw / 2.0
-        mcy = by + bh / 2.0
-        if tail == "left":
-            c.create_polygon(bx + 6, mcy - 6, bx - 8, mcy, bx + 6, mcy + 6, fill="white", outline="")
-        elif tail == "right":
-            c.create_polygon(bx + bw - 6, mcy - 6, bx + bw + 8, mcy, bx + bw - 6, mcy + 6, fill="white", outline="")
-        elif tail == "bottom":
-            c.create_polygon(mcx - 8, by + bh - 2, mcx, by + bh + 10, mcx + 8, by + bh - 2, fill="white", outline="")
-        else:  # top
-            c.create_polygon(mcx - 8, by + 2, mcx, by - 10, mcx + 8, by + 2, fill="white", outline="")
-        c.create_text(mcx, mcy, text="\n".join(lines), fill="#333333",
+        c.create_text(bx + pad_x, by + pad_y, text=text, width=max_text_w,
+                      anchor="nw", fill="#333333",
                       font=("Microsoft YaHei UI", fs))

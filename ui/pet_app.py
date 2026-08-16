@@ -405,7 +405,13 @@ class PetApp:
         goal = simpledialog.askstring("开始学习", "今天学什么？", parent=self.root)
         if goal is None:
             return
-        self.on_start_study(goal.strip() or "学习")
+        minutes = simpledialog.askstring(
+            "学习时长", "这次学多久？\n（分钟，留空 = 不限时长）", parent=self.root)
+        try:
+            minutes = int(minutes) if minutes and int(minutes) > 0 else None
+        except ValueError:
+            minutes = None
+        self.on_start_study(goal.strip() or "学习", minutes)
 
     def _menu_end_study(self):
         if self.on_end_study:

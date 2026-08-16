@@ -22,7 +22,7 @@ DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 FEATURES = [
     {"id": "start_study", "name": "开始学习",
      "where": "右键桌宠 →「开始学习…」，或快捷键 Ctrl+Alt+S",
-     "what": "告诉宠物今天学什么，进入监督会话；结束后宠物给总结并庆祝",
+     "what": "告诉宠物今天学什么 + 本次学习时长（分钟，可留空不限时），进入监督会话；到点提醒；结束后给总结",
      "added_in": "1.0"},
     {"id": "end_study", "name": "结束学习",
      "where": "右键桌宠 →「结束学习」",

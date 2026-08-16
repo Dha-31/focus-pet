@@ -13,15 +13,17 @@ class StudySession:
         self.start_time = None
         self.focus_seconds = 0.0
         self.distract_seconds = 0.0
+        self.planned_minutes = None   # 计划学习时长（分钟，None=不限）
         self.active = False
 
-    def start(self, goal="学习"):
+    def start(self, goal="学习", planned_minutes=None):
         if self.active:
             return False
         self.goal = goal
         self.start_time = time.time()
         self.focus_seconds = 0.0
         self.distract_seconds = 0.0
+        self.planned_minutes = float(planned_minutes) if planned_minutes else None
         self.active = True
         return True
 
@@ -32,6 +34,17 @@ class StudySession:
             self.focus_seconds += dt
         else:
             self.distract_seconds += dt
+
+    def planned_remaining_seconds(self):
+        """计划剩余秒数；无计划返回 None。"""
+        if not self.active or not self.planned_minutes:
+            return None
+        return max(0.0, self.planned_minutes * 60 - (time.time() - self.start_time))
+
+    def is_time_up(self):
+        """计划学习时间是否已到。"""
+        r = self.planned_remaining_seconds()
+        return r is not None and r <= 0
 
     def end(self):
         """结束会话，返回总结 dict（同时写入 focus_log.json）。"""
@@ -44,9 +57,11 @@ class StudySession:
             "end": datetime.datetime.now().isoformat(timespec="seconds"),
             "focus_minutes": round(self.focus_seconds / 60.0, 1),
             "distract_minutes": round(self.distract_seconds / 60.0, 1),
+            "planned_minutes": self.planned_minutes,
         }
         self._append_log(summary)
         self.goal = None
+        self.planned_minutes = None
         return summary
 
     @staticmethod

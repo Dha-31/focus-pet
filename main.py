@@ -236,8 +236,11 @@ def run_app():
             logbook.log_event("teach", f"教宠物: {info.get('process')}｜{info.get('title', '')[:20]}")
             pet.say("记住了，下次不拦你！")
 
-    def on_start_study(goal):
-        if session.start(goal):
+    time_up_reminded = [False]
+
+    def on_start_study(goal, minutes=None):
+        if session.start(goal, planned_minutes=minutes):
+            time_up_reminded[0] = False
             logbook.log_event("session_start", goal)
             sounds.play("start")
             if cfg.get("focus_assist", {}).get("enabled"):
@@ -246,7 +249,10 @@ def run_app():
                     _fa_enable()
                 except Exception:
                     pass
-            pet.say(f"好！今天一起学{goal}！")
+            if minutes:
+                pet.say(f"好！今天一起学{goal}，计划 {minutes} 分钟！")
+            else:
+                pet.say(f"好！今天一起学{goal}！")
         else:
             pet.say("已经在学习啦！")
 
@@ -628,6 +634,12 @@ def run_app():
             pet.set_mood(meter.mood)
             pet.set_activity(cat, pet_state.current_streak)   # 活动驱动动画（打盹/踱步）
             session.tick(cat == "study", poll)
+            # 计划学习时长到点提醒（一次）
+            if session.active and session.is_time_up() and not time_up_reminded[0]:
+                time_up_reminded[0] = True
+                pet.say(f"学习时间到啦！已经过了 {int(session.planned_minutes)} 分钟，可以休息或继续~")
+                sounds.play("celebrate")
+                logbook.log_event("time_up", f"计划时长 {int(session.planned_minutes)} 分钟到点")
 
             # 桌宠养成：专注加经验、摸鱼扣好感、升级提示
             if cat == "study":

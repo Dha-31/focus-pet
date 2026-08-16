@@ -230,10 +230,13 @@ def run_app():
         except Exception as exc:
             print("[camera] 摄像头初始化失败：", exc)
 
+    latest_browser_url = [None]   # 最近一次浏览器 URL（教宠物时精确记录解封）
+
     def on_teach(info):
         if info:
-            rules.learn(title=info.get("title", ""), process=info.get("process", ""))
-            logbook.log_event("teach", f"教宠物: {info.get('process')}｜{info.get('title', '')[:20]}")
+            rules.learn(title=info.get("title", ""), process=info.get("process", ""),
+                        url=latest_browser_url[0])
+            logbook.log_event("teach", f"教宠物: {info.get('process')}｜{info.get('title', '')[:20]}｜{latest_browser_url[0] or ''}")
             pet.say("记住了，下次不拦你！")
 
     time_up_reminded = [False]
@@ -568,6 +571,7 @@ def run_app():
                 latest = get_latest_url(bridge)
                 if latest and (time.time() - latest["ts"]) < 5.0:
                     url = latest["url"]
+                    latest_browser_url[0] = url
 
             cat = rules.classify(title=info["title"], process=info["process"], url=url)
 
@@ -643,8 +647,6 @@ def run_app():
 
             is_distraction = cat == "distraction"
             tier = meter.update(is_distraction, poll)
-            if screen_derived:
-                tier = min(tier, 1)  # 画面分析是启发式，只提醒不暴力关
             pet.set_mood(meter.mood)
             pet.set_activity(cat, pet_state.current_streak)   # 活动驱动动画（打盹/踱步）
             session.tick(cat == "study", poll)
@@ -688,10 +690,11 @@ def run_app():
                 blocker.reset()
             else:
                 if screen_derived:
-                    # 画面分析判定为分心：只提醒，不暴力关
+                    # 画面分析判定为分心：分级强制拦截（误判可右键「这个是学习用的！」解封）
                     if cat != last_cat:
-                        pet.say("这个画面看起来不像在学习哦~")
-                    blocker.reset()
+                        pet.say("这个画面看起来不像在学习哦~（误判就右键教宠物）")
+                    blocker.handle(tier, info["hwnd"], info["title"])
+                    blocker.tick(poll)
                 elif cam and cam.get("phone_suspicion"):
                     # 玩手机：关不了手机，只能提醒
                     if cat != last_cat:

@@ -551,6 +551,7 @@ def run_app():
     def supervisor():
         poll = max(0.5, float(cfg["supervision"]["poll_interval_seconds"]))
         last_cat = None
+        last_tier = 0
         while not stop_event.is_set():
             time.sleep(poll)
             info = get_foreground_info()
@@ -664,6 +665,18 @@ def run_app():
                 pet.celebrate(f"🎉 我升到 Lv.{pet_state.level} 啦！")
                 check_achievements()
             pet.set_level(pet_state.level)
+
+            # 小猫生气时的文字提醒（情绪升级时说话）
+            if tier > 0 and tier > last_tier:
+                if tier == 1:
+                    pet.say("喂喂，别分心啦，快回来学习！")
+                elif tier == 2:
+                    pet.say("还在分心？我要生气啦！")
+                elif tier == 3:
+                    pet.say("再分心我就要遮住你的屏幕了！")
+                else:
+                    pet.say("最后一次警告！快回来学习！")
+            last_tier = tier
 
             if tier == 0:
                 if last_cat == "distraction" and cat != "distraction":

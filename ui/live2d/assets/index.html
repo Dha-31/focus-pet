@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: blob:;">
+<style>
+  html, body { margin:0; padding:0; background:transparent; overflow:hidden; width:100%; height:100%; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="err" style="position:fixed;top:0;left:0;color:red;background:#fff;font-size:12px;white-space:pre-wrap;z-index:99;"></div>
+<script>
+window.onerror = function(msg, src, line) { document.getElementById("err").textContent += msg + " @ " + src + ":" + line + "\n"; };
+</script>
+<script src="js/pixi.min.js"></script>
+<script src="js/live2dcubismcore.min.js"></script>
+<script src="js/cubism4.min.js"></script>
+<script src="js/index.min.js"></script>
+<script>
+let app = null;
+let model = null;
+let baseScale = 1;
+let mood = 0;
+let lastBlink = performance.now();
+
+function setParam(id, v) {
+  try { model.internalModel.coreModel.setParameterValueById(id, v); } catch (e) {}
+}
+
+function fit() {
+  if (!model) return;
+  const scale = Math.min(window.innerWidth / model.width, window.innerHeight / model.height);
+  baseScale = scale;
+  model.scale.set(scale);
+  model.x = window.innerWidth / 2;
+  model.y = window.innerHeight / 2;
+  model.anchor.set(0.5, 0.5);
+}
+
+function tick() {
+  if (!model) return;
+  const now = performance.now();
+  // 眨眼：每 3~4 秒一次，生气时更快
+  const period = mood >= 3 ? 1500 : 3500;
+  const phase = (now - lastBlink) % period;
+  let eye = 1;
+  if (phase < 120) {
+    eye = phase < 60 ? 0.1 : Math.min(1, 0.1 + (phase - 60) / 60);
+  }
+  setParam("ParamEyeLOpen", eye);
+  setParam("ParamEyeROpen", eye);
+  // 呼吸轻微缩放
+  const breath = 1 + Math.sin(now / 800) * 0.012;
+  model.scale.set(baseScale * breath);
+  requestAnimationFrame(tick);
+}
+
+async function init() {
+  try {
+    app = new PIXI.Application({
+      view: document.getElementById("canvas"),
+      resizeTo: window,
+      backgroundAlpha: 0,
+      antialias: true,
+    });
+    model = await PIXI.live2d.Live2DModel.from("model/cat.model3.json");
+    app.stage.addChild(model);
+    fit();
+    window.addEventListener("resize", fit);
+    window.__live2dReady = true;
+  } catch (e) {
+    document.body.innerText = "Live2D fail: " + e.message;
+    document.body.style.color = "red";
+    document.body.style.background = "white";
+  }
+}
+
+window.setMood = function(m) {
+  mood = Math.max(0, Math.min(4, m | 0));
+  // 表情映射：开心/好奇=0，不耐烦/生气=1，暴怒=2
+  const expr = [0, 0, 1, 1, 2][mood];
+  try { model && model.expression(expr); } catch (e) {}
+};
+
+window.playMotion = function() {
+  try { model && model.motion("CAT_motion"); } catch (e) {}
+};
+
+init();
+</script>
+</body>
+</html>

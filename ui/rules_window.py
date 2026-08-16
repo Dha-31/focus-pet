@@ -32,7 +32,7 @@ class RulesWindow:
         self.whitelist_path = os.path.join(DATA_DIR, "whitelist.json")
         self.root = tk.Toplevel(parent)
         self.root.title("黑白名单设置")
-        self.root.geometry("900x720")
+        self.root.geometry("1500x900")
         style_window(self.root)
         self._build()
         # 确保窗口可正常输入：置前 + 聚焦第一个文本框

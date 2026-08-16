@@ -21,6 +21,7 @@ class BridgeState:
     def __init__(self, rules):
         self.rules = rules
         self.latest = None  # {"url": str, "title": str, "ts": float}
+        self.supervising = False  # 是否在学习会话中（只有学习中才拦截）
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -79,7 +80,8 @@ class _Handler(BaseHTTPRequestHandler):
                 title=data.get("title") or "",
                 url=data.get("url") or "",
             )
-            self._send(200, {"category": cat, "block": cat == "distraction"})
+            block = (cat == "distraction") and state.supervising
+            self._send(200, {"category": cat, "block": block})
         elif path == "/teach":
             url = data.get("url") or ""
             if url:

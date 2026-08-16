@@ -241,6 +241,8 @@ def run_app():
     def on_start_study(goal, minutes=None):
         if session.start(goal, planned_minutes=minutes):
             time_up_reminded[0] = False
+            if bridge:
+                bridge.state.supervising = True   # 学习中：启用浏览器扩展拦截
             logbook.log_event("session_start", goal)
             sounds.play("start")
             if cfg.get("focus_assist", {}).get("enabled"):
@@ -258,6 +260,8 @@ def run_app():
 
     def on_end_study():
         summary = session.end()
+        if bridge:
+            bridge.state.supervising = False   # 结束学习：解除浏览器扩展拦截
         if not summary:
             pet.say("还没有开始学习呢")
             return
@@ -626,6 +630,15 @@ def run_app():
                 _cur = _tiers.get(pet_state.mode)
                 if _cur and list(_cur) != meter.tier_seconds:
                     meter.tier_seconds = list(_cur)
+
+            # 只有学习会话中才监督；未学习/已结束时宠物不生气、不阻断
+            if not session.active:
+                meter.update(False, poll)
+                blocker.reset()
+                pet.set_mood(meter.mood)
+                pet.set_activity("idle", 0)
+                last_cat = cat
+                continue
 
             is_distraction = cat == "distraction"
             tier = meter.update(is_distraction, poll)

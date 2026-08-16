@@ -78,15 +78,43 @@ class RuleEngine:
                 return True
         return False
 
+    @staticmethod
+    def _match_url(pattern, url):
+        """URL 精确匹配（白名单/learned 用）：去 scheme/query/www，域名根只匹配根页面，路径做前缀匹配。
+
+        避免像 https://www.bilibili.com/ 这样的根地址误放行整个 bilibili.com。
+        """
+        if not pattern or not url:
+            return False
+        def norm(u):
+            u = (u or "").strip().lower()
+            if u.startswith("https://"):
+                u = u[8:]
+            elif u.startswith("http://"):
+                u = u[7:]
+            u = u.split("?")[0].split("#")[0].rstrip("/")
+            if u.startswith("www."):
+                u = u[4:]
+            return u
+        p = norm(pattern)
+        t = norm(url)
+        if not p or not t:
+            return False
+        if "/" not in p:
+            # 纯域名：只匹配根页面（t 也必须无路径），不匹配子路径
+            return t == p
+        # 有路径：前缀匹配（边界为 / 或结尾）
+        return t == p or t.startswith(p + "/")
+
     def _is_whitelisted(self, title, process, url):
-        if url and self._match(self.whitelist["urls"], url):
+        if url and any(self._match_url(p, url) for p in self.whitelist["urls"]):
             return True
         if self._match(self.whitelist["processes"], process):
             return True
         if self._match(self.whitelist["titles"], title):
             return True
-        # 教宠物学习到的内容 = 隐式白名单
-        if url and self._match(self.learned["urls"], url):
+        # 教宠物学习到的内容 = 隐式白名单（精确 URL 匹配，根地址不会放行全站）
+        if url and any(self._match_url(p, url) for p in self.learned["urls"]):
             return True
         if self._match(self.learned["processes"], process):
             return True

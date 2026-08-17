@@ -1,8 +1,6 @@
 """ui/pet_renderer.py：共享宠物绘制（桌宠窗口与个人空间共用）。
 
 - draw_procedural_pet：程序化小猫（表情/等级/装饰品）
-- draw_accessory：在"头部框架"（中心+半径）上画装饰品 —— 程序化形象和
-  自定义图片形象都能用（图片形象的人脸由 pet.json 元数据提供）
 - draw_expression_overlay：给自定义图片形象叠加表情标记（生气眉/腮红/汗滴），
   不修改照片本身（要真的改变照片表情需要 Live2D 骨骼绑定，属远期）
 """
@@ -46,7 +44,7 @@ OUTLINE_GOLD = "#d4a017"
 BLUSH = "#ffb3b3"
 
 
-def draw_procedural_pet(c, cx, cy, shake, mood, level, accessory=None,
+def draw_procedural_pet(c, cx, cy, shake, mood, level,
                         t=0.0, show_level=True, blink_period=3.0, look=None,
                         view_scale=1.0, napping=False):
     """画一只会变表情的程序化小猫。"""
@@ -141,56 +139,6 @@ def draw_procedural_pet(c, cx, cy, shake, mood, level, accessory=None,
         c.create_text(cx + shake, cy + 40 * s + 14, text=f"Lv.{level}",
                       fill="#777777", font=("Microsoft YaHei UI", 8))
 
-    # 装饰品（戴在头上）
-    if accessory:
-        hr = 24 * s
-        draw_accessory(c, cx + shake, cy - 10 * s, hr, accessory)
-
-
-def draw_accessory(c, hx, hy, hr, kind):
-    """在"头部框架"（hx,hy 中心 + hr 半径）上画装饰品。"""
-    if kind == "hat":      # 小红帽
-        c.create_rectangle(hx - hr * 1.2, hy - hr * 1.15, hx + hr * 1.2, hy - hr * 0.9,
-                           fill="#e05050", outline="#b03030")
-        c.create_arc(hx - hr * 0.9, hy - hr * 2.0, hx + hr * 0.9, hy - hr * 0.6,
-                     start=180, extent=180, fill="#e05050", outline="#b03030")
-    elif kind == "bow":    # 蝴蝶结（耳朵旁）
-        c.create_polygon(hx - hr * 1.15, hy - hr * 1.4, hx - hr * 0.35, hy - hr * 1.15,
-                         hx - hr * 1.15, hy - hr * 0.9, fill="#ff9ec7", outline="#e0709a")
-        c.create_polygon(hx + hr * 1.15, hy - hr * 1.4, hx + hr * 0.35, hy - hr * 1.15,
-                         hx + hr * 1.15, hy - hr * 0.9, fill="#ff9ec7", outline="#e0709a")
-        c.create_oval(hx - hr * 0.28, hy - hr * 1.28, hx + hr * 0.28, hy - hr * 1.02,
-                      fill="#e0709a", outline="")
-    elif kind == "glasses":  # 眼镜
-        c.create_oval(hx - hr * 0.95, hy - hr * 0.55, hx - hr * 0.1, hy + hr * 0.25,
-                      outline="#444444", width=2)
-        c.create_oval(hx + hr * 0.1, hy - hr * 0.55, hx + hr * 0.95, hy + hr * 0.25,
-                      outline="#444444", width=2)
-        c.create_line(hx - hr * 0.1, hy - hr * 0.15, hx + hr * 0.1, hy - hr * 0.15,
-                      fill="#444444", width=2)
-        c.create_line(hx - hr * 0.95, hy - hr * 0.15, hx - hr * 1.25, hy - hr * 0.3,
-                      fill="#444444", width=2)
-        c.create_line(hx + hr * 0.95, hy - hr * 0.15, hx + hr * 1.25, hy - hr * 0.3,
-                      fill="#444444", width=2)
-    elif kind == "scarf":  # 围巾
-        c.create_rectangle(hx - hr * 0.95, hy + hr * 0.55, hx + hr * 0.95, hy + hr * 1.15,
-                           fill="#5aa0e0", outline="#3a70a8")
-        c.create_rectangle(hx - hr * 0.95, hy + hr * 0.55, hx - hr * 0.45, hy + hr * 1.5,
-                           fill="#5aa0e0", outline="#3a70a8")
-    elif kind == "flower":  # 小花
-        for dx, dy in ((1, 0), (0.3, 0.95), (-0.8, 0.6), (-0.8, -0.6), (0.3, -0.95)):
-            px = hx + dx * hr * 0.5
-            py = hy - hr * 1.5 + dy * hr * 0.5
-            c.create_oval(px - hr * 0.25, py - hr * 0.25, px + hr * 0.25, py + hr * 0.25,
-                          fill="#ffd166", outline="#e0a020")
-        c.create_oval(hx - hr * 0.18, hy - hr * 1.5 - hr * 0.18, hx + hr * 0.18,
-                      hy - hr * 1.5 + hr * 0.18, fill="#e0709a", outline="")
-    elif kind == "crown":  # 金皇冠
-        pts = [(hx - hr * 0.9, hy - hr * 1.3), (hx - hr * 0.55, hy - hr * 2.0),
-               (hx - hr * 0.25, hy - hr * 1.5), (hx + hr * 0.25, hy - hr * 1.5),
-               (hx + hr * 0.55, hy - hr * 2.0), (hx + hr * 0.9, hy - hr * 1.3),
-               (hx - hr * 0.9, hy - hr * 1.3)]
-        c.create_polygon(pts, fill="#ffd700", outline="#c9a400", width=1)
 
 
 def draw_expression_overlay(c, hx, hy, hr, mood):

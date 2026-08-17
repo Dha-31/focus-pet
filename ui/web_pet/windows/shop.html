@@ -1,0 +1,71 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>商店</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;background:#f6efe6;color:#333}
+header{background:#fff;padding:14px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:18px} #coins{color:#e07a2f;font-size:15px;font-weight:bold}
+#tabs{display:flex;gap:8px;padding:12px 20px 0}
+.tab{padding:8px 20px;background:#fff;border-radius:10px 10px 0 0;cursor:pointer;font-size:14px;color:#888;border:1px solid transparent}
+.tab.on{background:#fff;color:#e07a2f;font-weight:bold;border-color:#f2e8da;border-bottom-color:#fff}
+#content{padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px}
+.card{width:190px;background:#fff;border-radius:12px;padding:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.card .pic{font-size:44px;height:60px;line-height:60px;background:#fff8ee;border-radius:10px}
+.card .nm{font-size:13px;font-weight:bold;margin:8px 0 2px} .card .pr{font-size:12px;color:#e07a2f;margin-bottom:8px}
+.card button{border:0;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;width:100%}
+.buy{background:#5cb85c;color:#fff} .place{background:#e07a2f;color:#fff} .own{background:#eee;color:#999;cursor:default}
+#msg{font-size:13px;color:#2e8b57}
+</style></head>
+<body>
+<header><h1>商店</h1><span id="coins">专注币：0</span></header>
+<div id="tabs"></div>
+<div id="content"></div>
+<script>
+"use strict";
+const PORT=(window.api&&window.api.pyPort)||""; const BASE="http://127.0.0.1:"+PORT;
+const EMOJI={"rug":"🟫","lamp":"🛋️","plant":"🪴","window":"🪟","table":"🪑","bookshelf":"📚","sofa":"🛋️",
+"fridge":"🧊","tv":"📺","clock":"🕰️","armchair":"💺","star_rug":"🌌","moon_lamp":"🌙","planet":"🪐","telescope":"🔭",
+"star_desk":"🪩","star_chair":"🪑","star_books":"📚","aurora":"🌠","beach_umbrella":"⛱️","beach_chair":"🏖️","sandcastle":"🏰","shell":"🐚",
+"fish_tank":"🐠","hammock":"🪢","sea_rug":"🏝️","crab":"🦀","tree":"🌲","mushroom":"🍄","log":"🪵","birdhouse":"🏠",
+"swing":"🪁","stump_table":"🪑","beehive":"🐝","forest_lamp":"🏮","tent":"⛺","campfire":"🔥","picnic":"🧺","camp_lamp":"🏮","camp_chair":"🪑","cooler":"🧊"};
+let state={furniture:[],scenes:[],inventory:{coins:0,owned_furniture:[],placed_furniture:{}}};
+let curScene="cozy";
+async function load(){
+  try{ state=await fetch(BASE+"/api/shop").then(r=>r.json()); buildTabs(); render(); }
+  catch(e){ document.getElementById("content").innerHTML="<p style='color:#c00'>无法连接桌宠</p>"; }
+}
+function buildTabs(){
+  const t=document.getElementById("tabs"); t.innerHTML="";
+  state.scenes.forEach(([id,name])=>{
+    const b=document.createElement("div"); b.className="tab"+(id===curScene?" on":""); b.textContent=name;
+    b.onclick=()=>{curScene=id; document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); b.classList.add("on"); render();};
+    t.appendChild(b);
+  });
+}
+function render(){
+  document.getElementById("coins").textContent="专注币："+state.inventory.coins;
+  const c=document.getElementById("content"); c.innerHTML="";
+  const items=state.furniture.filter(f=>f.scene===curScene);
+  if(!items.length){ c.innerHTML="<p style='color:#aaa'>这个地图的家具还在准备中</p>"; return; }
+  items.forEach(f=>{
+    const owned=state.inventory.owned_furniture.includes(f.id);
+    const placed=(state.inventory.placed_furniture[f.scene]||[]).includes(f.id);
+    const card=document.createElement("div"); card.className="card";
+    card.innerHTML=`<div class="pic">${EMOJI[f.id]||"🪑"}</div><div class="nm">${f.name}</div><div class="pr">💰 ${f.price} 币</div>`;
+    const btn=document.createElement("button");
+    if(owned){ btn.className=placed?"own":"place"; btn.textContent=placed?"已放置":(f.scene===curScene?"放置":"放在"+state.scenes.find(s=>s[0]===f.scene)[1]); if(!placed) btn.onclick=()=>place(f); }
+    else{ btn.className="buy"; btn.textContent="购买"; btn.onclick=()=>buy(f); }
+    card.appendChild(btn); c.appendChild(card);
+  });
+}
+async function buy(f){
+  const r=await fetch(BASE+"/api/shop/buy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:f.id})}).then(x=>x.json());
+  if(r.ok){ document.getElementById("msg").textContent="已购买 "+f.name; state.inventory.coins=r.coins; state.inventory.owned_furniture.push(f.id); render(); }
+  else document.getElementById("msg").textContent="专注币不足";
+}
+async function place(f){
+  const r=await fetch(BASE+"/api/shop/place",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:f.id})}).then(x=>x.json());
+  if(r.ok){ state.inventory.placed_furniture[f.scene]=state.inventory.placed_furniture[f.scene]||[]; state.inventory.placed_furniture[f.scene].push(f.id); render(); }
+}
+load();
+</script></body></html>

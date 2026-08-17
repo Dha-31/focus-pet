@@ -1,0 +1,6 @@
+﻿{
+  "name": "focus-pet-desktop",
+  "version": "0.1.0",
+  "main": "main.js",
+  "description": "Focus Pet 桌宠渲染壳（Electron，透明+置顶+鼠标穿透，学习 Open-LLM-VTuber 桌宠模式）"
+}

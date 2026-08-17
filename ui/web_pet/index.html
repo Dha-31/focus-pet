@@ -1,0 +1,405 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --scale: 1.0; --font-max: 12px; }
+  * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: transparent; overflow: hidden;
+    font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    cursor: default;
+  }
+  #pet-stage { position: absolute; left: 10px; bottom: 10px; width: 150px; height: 150px; touch-action: none; }
+  #pet { width: 100%; height: 100%; display: block; }
+
+  /* 说话气泡：普通 div、不提升独立合成层（软件渲染才能正常叠加，与右键菜单同理）；
+     位置由 JS 动态贴到脑袋右侧，绝不压图、不两字换行；随 --scale 一起缩放 */
+  #bubble-wrap { position: absolute; display: none; width: fit-content; max-width: calc(230px * var(--scale)); pointer-events: none; z-index: 5; }
+  #bubble-wrap.show { display: block; }
+  #bubble {
+    background: #fff; color: #333; border: 1px solid rgba(0,0,0,.10);
+    border-radius: calc(14px * var(--scale)); padding: calc(8px * var(--scale)) calc(12px * var(--scale));
+    font-size: calc(var(--font-max) * var(--scale)); line-height: 1.42; letter-spacing: .2px;
+    white-space: normal; word-break: break-word; overflow-wrap: anywhere;
+    text-align: left;
+  }
+  #bubble::before {
+    content: ""; position: absolute; left: -7px; top: 50%; transform: translateY(-50%);
+    border: 7px solid transparent; border-right-color: #fff;
+  }
+
+  /* 自定义右键菜单 */
+  #menu { position: fixed; display: none; z-index: 99; min-width: 176px; padding: 6px;
+    background: rgba(255,255,255,.98); border: 1px solid rgba(0,0,0,.08);
+    border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18);
+    font-size: 12px; color: #333;
+    max-height: calc(100% - 16px); overflow-y: auto; }
+  #menu.show { display: block; }
+  #menu .item { padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  #menu .item:hover { background: #f2f2f7; }
+  #menu .sep { height: 1px; background: #eee; margin: 5px 6px; }
+  #menu .label { color: #999; padding: 6px 12px 2px; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div id="pet-stage">
+    <svg id="pet" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <polygon id="earL" points="55,70 38,20 85,52" fill="#ffd98a" stroke="#e8a95b" stroke-width="4" stroke-linejoin="round"/>
+      <polygon id="earR" points="145,70 162,20 115,52" fill="#ffd98a" stroke="#e8a95b" stroke-width="4" stroke-linejoin="round"/>
+      <circle id="body" cx="100" cy="104" r="62" fill="#ffe0b3" stroke="#e8a95b" stroke-width="5"/>
+      <ellipse id="blushL" cx="72" cy="116" rx="11" ry="7" fill="#ffb3b3" opacity="0"/>
+      <ellipse id="blushR" cx="128" cy="116" rx="11" ry="7" fill="#ffb3b3" opacity="0"/>
+      <ellipse id="eyeL" cx="82" cy="94" rx="8" ry="10" fill="#4a3728"/>
+      <ellipse id="eyeR" cx="118" cy="94" rx="8" ry="10" fill="#4a3728"/>
+      <line id="blinkL" x1="74" y1="94" x2="90" y2="94" stroke="#4a3728" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <line id="blinkR" x1="110" y1="94" x2="126" y2="94" stroke="#4a3728" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <path id="peepL" d="M74 94 Q82 85 90 94" stroke="#4a3728" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0"/>
+      <path id="peepR" d="M110 94 Q118 85 126 94" stroke="#4a3728" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0"/>
+      <line id="browL" x1="72" y1="80" x2="90" y2="84" stroke="#4a3728" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <line id="browR" x1="128" y1="80" x2="110" y2="84" stroke="#4a3728" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <path id="mouth" d="M84 126 Q100 140 116 126" stroke="#4a3728" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <g id="angerMark" opacity="0">
+        <path d="M138 70 l6 -10 M132 70 l-6 -10" stroke="#e05050" stroke-width="3" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </div>
+
+  <div id="bubble-wrap"><div id="bubble"></div></div>
+  <div id="menu"></div>
+
+<script>
+"use strict";
+const isElectron = typeof window.api !== "undefined" && !!window.api;
+const petStage = document.getElementById("pet-stage");
+const svg = document.getElementById("pet");
+
+// ---------- 状态 ----------
+let mood = 0, sleeping = false, mini = false, activity = "idle", focusStreak = 0;
+let level = 1, mode = "daily", workActive = false, workRemaining = 0, dnd = false;
+let pomodoro = false, blockMode = false, latestInfo = null;
+let bubbleTimer = null;
+
+function setMood(m) {
+  mood = Math.max(0, Math.min(4, m | 0));
+  const body = document.getElementById("body");
+  body.setAttribute("fill", mood >= 3 ? "#f7b9b9" : "#ffe0b3");
+  body.setAttribute("stroke", mood >= 3 ? "#d9534f" : (level >= 6 ? "#d4a017" : "#e8a95b"));
+  document.getElementById("blushL").setAttribute("opacity", mood >= 1 ? "0.9" : "0");
+  document.getElementById("blushR").setAttribute("opacity", mood >= 1 ? "0.9" : "0");
+  document.getElementById("blushL").setAttribute("fill", mood >= 3 ? "#ff8080" : "#ffb3b3");
+  document.getElementById("blushR").setAttribute("fill", mood >= 3 ? "#ff8080" : "#ffb3b3");
+  document.getElementById("browL").setAttribute("opacity", mood >= 2 ? "1" : "0");
+  document.getElementById("browR").setAttribute("opacity", mood >= 2 ? "1" : "0");
+  document.getElementById("angerMark").setAttribute("opacity", mood >= 3 ? "1" : "0");
+  const mouth = document.getElementById("mouth");
+  if (mood === 0) mouth.setAttribute("d", "M84 126 Q100 140 116 126");
+  else if (mood === 1) mouth.setAttribute("d", "M88 132 Q100 122 112 132");
+  else if (mood === 2) mouth.setAttribute("d", "M88 132 L112 132");
+  else mouth.setAttribute("d", "M84 136 Q100 122 116 136");
+}
+
+function setMini(on) {
+  mini = !!on;
+  const s = mini ? 0.55 : 1.0;
+  document.documentElement.style.setProperty("--scale", String(s));
+  petStage.style.width = (150 * s) + "px";
+  petStage.style.height = (150 * s) + "px";
+  positionBubble();
+}
+
+// 从 Python 收到的状态
+function applyState(s) {
+  if (!s) return;
+  if (s.say !== undefined) { showBubble(s.say, s.seconds || 4); }
+  if (s.mood !== undefined) setMood(s.mood);
+  if (s.mini !== undefined) setMini(s.mini);
+  if (s.sleep !== undefined) sleeping = !!s.sleep;
+  if (s.activity !== undefined) { activity = s.activity; focusStreak = s.focusStreak || 0; }
+  if (s.level !== undefined) level = s.level | 0;
+  if (s.mode !== undefined) mode = s.mode;
+  if (s.work !== undefined) { workActive = s.work.active; workRemaining = s.work.remaining || 0; }
+  if (s.dnd !== undefined) dnd = !!s.dnd;
+  if (s.pomodoro !== undefined) pomodoro = !!s.pomodoro;
+  if (s.block !== undefined) blockMode = !!s.block;
+  if (s.state !== undefined) playState(s.state, s.seconds || 3);
+  if (s.info !== undefined) latestInfo = s.info;
+}
+
+// ---------- 气泡 ----------
+function positionBubble() {
+  const w = document.getElementById("bubble-wrap");
+  if (!w.classList.contains("show")) return;
+  const pr = petStage.getBoundingClientRect();
+  const catRight = pr.left + pr.width * 0.81;   // 猫身体右缘（视图 162/200）
+  const headY = pr.top + pr.height * 0.30;      // 头部高度
+  let left = catRight + 8;                      // 贴脑袋右侧
+  if (left + w.offsetWidth > window.innerWidth - 4) {
+    left = Math.max(4, window.innerWidth - w.offsetWidth - 4);
+  }
+  w.style.left = left + "px";
+  w.style.top = Math.max(4, headY - w.offsetHeight / 2) + "px";
+}
+
+function showBubble(text, seconds) {
+  const w = document.getElementById("bubble-wrap");
+  const b = document.getElementById("bubble");
+  if (!text) { w.classList.remove("show"); return; }
+  b.textContent = text;
+  w.classList.add("show");
+  positionBubble();
+  if (bubbleTimer) clearTimeout(bubbleTimer);
+  bubbleTimer = setTimeout(() => w.classList.remove("show"), (seconds || 4) * 1000);
+}
+
+// ---------- 动画循环 ----------
+let t = 0;
+function tick(now) {
+  t = now / 1000;
+  let breath = 1 + Math.sin(t * 2.2) * 0.015;
+  if (sleeping) breath = 1 + Math.sin(t * 1.0) * 0.025;
+  let dx = 0, dy = 0;
+  if (blockMode || mood >= 3) dx = Math.sin(t * 40) * 2.2;
+  if (activity === "distraction" && mood >= 2 && !blockMode) dx += Math.sin(t * 6) * 6;
+  if (sleeping) dy = 1.5;
+  petStage.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + breath + ")";
+  petStage.style.transformOrigin = "50% 100%";
+
+  const period = (mood >= 3 ? 1.6 : 3.2);
+  const phase = t % period;
+  const blink = sleeping || (phase < 0.16);
+  document.getElementById("eyeL").setAttribute("opacity", blink ? "0" : "1");
+  document.getElementById("eyeR").setAttribute("opacity", blink ? "0" : "1");
+  document.getElementById("blinkL").setAttribute("opacity", blink ? "1" : "0");
+  document.getElementById("blinkR").setAttribute("opacity", blink ? "1" : "0");
+  requestAnimationFrame(tick);
+}
+
+function playState(state, seconds) {
+  if (state === "celebrate") svg.style.filter = "drop-shadow(0 0 8px #ffd166)";
+  else if (state === "error") svg.style.filter = "drop-shadow(0 0 8px #ff6b6b)";
+  else svg.style.filter = "";
+  setTimeout(() => { svg.style.filter = ""; }, (seconds || 3) * 1000);
+}
+
+// ---------- 菜单 ----------
+const MENU_ITEMS = [
+  { t: "学习", items: [
+    { k: "start", icon: "▶", label: "开始学习" },
+    { k: "end", icon: "■", label: "结束学习" },
+    { k: "pomodoro", icon: "🍅", label: "番茄钟" },
+    { k: "sep" },
+    { k: "mode_daily", icon: "📘", label: "日常自习" },
+    { k: "mode_exam", icon: "📝", label: "考试冲刺" },
+    { k: "mode_relaxed", icon: "🍃", label: "轻松模式" },
+    { k: "mode_custom", icon: "⚙", label: "自定义模式" },
+  ]},
+  { t: "养成", items: [
+    { k: "feed", icon: "🍪", label: "投喂…" },
+    { k: "checkin", icon: "📅", label: "每日打卡" },
+  ]},
+  { t: "空间与商店", items: [
+    { k: "space", icon: "🏠", label: "我的空间…" },
+    { k: "shop", icon: "🛒", label: "商店…" },
+  ]},
+  { t: "学习数据", items: [
+    { k: "report", icon: "📊", label: "学习报告…" },
+    { k: "achievements", icon: "🏅", label: "成就…" },
+  ]},
+  { t: "系统", items: [
+    { k: "dnd", icon: "🔕", label: "免打扰" },
+    { k: "mini", icon: "🐾", label: "迷你模式" },
+    { k: "autostart", icon: "🔄", label: "开机自启" },
+    { k: "settings", icon: "🛠", label: "设置…" },
+    { k: "rules", icon: "🚦", label: "黑白名单…" },
+  ]},
+  { t: "帮助与退出", items: [
+    { k: "help", icon: "❓", label: "使用帮助…" },
+    { k: "exit", icon: "✖", label: "退出" },
+  ]},
+];
+
+const COMMAND_MAP = {
+  start: "menu_start_study", end: "menu_end_study", pomodoro: "menu_toggle_pomodoro",
+  pet: "menu_pet", feed: "menu_feed", checkin: "menu_checkin",
+  mode_daily: "menu_mode_daily", mode_exam: "menu_mode_exam",
+  mode_relaxed: "menu_mode_relaxed", mode_custom: "menu_mode_custom",
+  dnd: "menu_toggle_dnd", mini: "menu_toggle_mini", autostart: "menu_toggle_autostart", settings: "menu_open_settings",
+  rules: "menu_open_rules", help: "menu_open_help", space: "menu_open_space",
+  shop: "menu_open_shop", report: "menu_open_report", achievements: "menu_open_achievements",
+  exit: "menu_exit",
+};
+
+// 打开辅助窗口的菜单项（Electron 模式下直接开 HTML 窗口）
+const OPEN_WINDOWS = {
+  settings: "settings", rules: "rules", help: "help", space: "space",
+  shop: "shop", report: "report", achievements: "achievements",
+};
+
+function call(k) {
+  if (k === "exit") {
+    // 退出 = 最小化到托盘（不真正退出；托盘右键"退出"才是真正关闭）
+    if (isElectron) {
+      window.api.command("menu_exit", []);
+      window.api.hideToTray();
+    } else if (window.pywebview && window.pywebview.api) {
+      try { window.pywebview.api.menu_exit(); } catch (e) {}
+    }
+    return;
+  }
+  if (isElectron && OPEN_WINDOWS[k]) {
+    window.api.openWindow(OPEN_WINDOWS[k]);
+    return;
+  }
+  const fn = COMMAND_MAP[k];
+  if (!fn) return;
+  if (isElectron) {
+    window.api.command(fn, []);
+  } else if (window.pywebview && window.pywebview.api) {
+    try { window.pywebview.api[fn](); } catch (e) {}
+  }
+}
+
+function buildMenu() {
+  const m = document.getElementById("menu");
+  m.innerHTML = "";
+  MENU_ITEMS.forEach((group, gi) => {
+    if (gi > 0) { const s = document.createElement("div"); s.className = "sep"; m.appendChild(s); }
+    const lab = document.createElement("div"); lab.className = "label"; lab.textContent = group.t; m.appendChild(lab);
+    group.items.forEach(it => {
+      if (it.k === "sep") {
+        const s = document.createElement("div"); s.className = "sep"; m.appendChild(s);
+        return;
+      }
+      const d = document.createElement("div"); d.className = "item";
+      d.innerHTML = '<span style="width:18px;text-align:center">' + it.icon + '</span><span>' + it.label + '</span>';
+      d.addEventListener("click", () => { hideMenu(); call(it.k); });
+      m.appendChild(d);
+    });
+  });
+}
+
+function showMenu(x, y) {
+  const m = document.getElementById("menu");
+  m.classList.add("show");
+  if (isElectron) window.api.setIgnoreMouseEvents(false);
+  const r = m.getBoundingClientRect();
+  const ww = window.innerWidth, wh = window.innerHeight;
+  let mx = x, my = y;
+  if (mx + r.width > ww) mx = Math.max(4, ww - r.width - 4);
+  if (my + r.height > wh) my = Math.max(4, wh - r.height - 4);
+  m.style.left = mx + "px"; m.style.top = my + "px";
+}
+function hideMenu() {
+  document.getElementById("menu").classList.remove("show");
+  updateIgnoreMouse();
+}
+
+document.addEventListener("contextmenu", (e) => { e.preventDefault(); showMenu(e.clientX, e.clientY); });
+document.addEventListener("click", (e) => {
+  if (!document.getElementById("menu").contains(e.target)) hideMenu();
+});
+
+// ---------- 鼠标穿透 + 拖拽 + 点击（学 Open-LLM-VTuber） ----------
+let lastMouse = { x: -9999, y: -9999 };
+let dragState = null;
+let lastTap = 0, patCool = 0;
+
+function updateIgnoreMouse() {
+  if (!isElectron) return;
+  // 右键菜单打开时绝不能穿透，否则点不到菜单项
+  if (document.getElementById("menu").classList.contains("show")) {
+    window.api.setIgnoreMouseEvents(false);
+    return;
+  }
+  const r = petStage.getBoundingClientRect();
+  const onPet = lastMouse.x >= r.left && lastMouse.x <= r.right &&
+                lastMouse.y >= r.top && lastMouse.y <= r.bottom;
+  window.api.setIgnoreMouseEvents(!onPet);
+}
+
+document.addEventListener("pointermove", (e) => {
+  lastMouse = { x: e.clientX, y: e.clientY };
+  if (dragState) {
+    const dx = e.screenX - dragState.sx, dy = e.screenY - dragState.sy;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      dragState.moved = true;
+      if (isElectron) window.api.moveWindow(dragState.wx + dx, dragState.wy + dy);
+    }
+  }
+  updateIgnoreMouse();
+});
+
+petStage.addEventListener("pointerdown", (e) => {
+  dragState = { sx: e.screenX, sy: e.screenY, wx: window.screenX, wy: window.screenY, moved: false };
+});
+
+document.addEventListener("pointerup", () => {
+  if (dragState) {
+    const wasDrag = dragState.moved;
+    dragState = null;
+    if (!wasDrag) {
+      const now = performance.now();
+      if (now - lastTap < 350) {   // 双击 = 摸头
+        lastTap = 0;
+        petPat();
+        call("pet");
+      } else {
+        lastTap = now;
+      }
+    }
+  }
+});
+
+// 摸头动画：头顶冒爱心 + 脸红 + 眼睛眯起（有冷却）
+function petPat() {
+  const now = performance.now();
+  if (now - patCool < 2500) return;
+  patCool = now;
+  document.getElementById("blushL").setAttribute("opacity", "1");
+  document.getElementById("blushR").setAttribute("opacity", "1");
+  document.getElementById("blushL").setAttribute("fill", "#ff6b6b");
+  document.getElementById("blushR").setAttribute("fill", "#ff6b6b");
+  document.getElementById("eyeL").setAttribute("opacity", "0");
+  document.getElementById("eyeR").setAttribute("opacity", "0");
+  document.getElementById("peepL").setAttribute("opacity", "1");
+  document.getElementById("peepR").setAttribute("opacity", "1");
+  const pr = petStage.getBoundingClientRect();
+  for (let i = 0; i < 5; i++) {
+    const h = document.createElement("div");
+    h.textContent = "💖";
+    h.style.cssText = "position:fixed;left:" + (pr.left + pr.width * 0.25 + Math.random() * pr.width * 0.5) +
+      "px;top:" + (pr.top + 6) + "px;font-size:" + (16 + Math.random() * 12) + "px;pointer-events:none;z-index:99;" +
+      "transition:all 1.2s ease-out;opacity:1;";
+    document.body.appendChild(h);
+    requestAnimationFrame(() => {
+      h.style.transform = "translateY(" + (-60 - Math.random() * 45) + "px) translateX(" + ((Math.random() - 0.5) * 45) + "px)";
+      h.style.opacity = "0";
+    });
+    setTimeout(() => h.remove(), 1300);
+  }
+  setTimeout(() => {
+    document.getElementById("blushL").setAttribute("opacity", "0");
+    document.getElementById("blushR").setAttribute("opacity", "0");
+    document.getElementById("eyeL").setAttribute("opacity", "1");
+    document.getElementById("eyeR").setAttribute("opacity", "1");
+    document.getElementById("peepL").setAttribute("opacity", "0");
+    document.getElementById("peepR").setAttribute("opacity", "0");
+  }, 1600);
+}
+
+// ---------- 启动 ----------
+setMood(0);
+buildMenu();
+requestAnimationFrame(tick);
+window.addEventListener("resize", positionBubble);
+
+if (isElectron) {
+  window.api.onState(applyState);
+  window.api.ready();
+}
+</script>
+</body>
+</html>

@@ -31,3 +31,6 @@ build/
 dist/
 *.spec
 
+
+tools/electron/
+

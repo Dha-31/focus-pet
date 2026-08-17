@@ -24,6 +24,7 @@ def main():
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean",
+        "--windowed",   # 最终用户版无黑色控制台（开发调试请用 python main.py）
         "--name", "FocusPet",
         "--icon", os.path.join(PROJECT_ROOT, "data", "pet_icon.ico"),
         # 数据目录（运行时读写：皮肤/配置/日志/文档/扩展）
@@ -33,6 +34,9 @@ def main():
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'browser_extension')}{os.pathsep}browser_extension",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'models')}{os.pathsep}models",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'release')}{os.pathsep}release",
+        "--add-data", f"{os.path.join(PROJECT_ROOT, 'desktop')}{os.pathsep}desktop",
+        "--add-data", f"{os.path.join(PROJECT_ROOT, 'ui', 'web_pet')}{os.pathsep}ui/web_pet",
+        "--add-data", f"{os.path.join(PROJECT_ROOT, 'tools', 'electron', 'runtime')}{os.pathsep}tools/electron/runtime",
     ]
     import importlib.util as _iu
     if not full:
@@ -41,7 +45,7 @@ def main():
             cmd += ["--exclude-module", mod]
     else:
         # 完整版：mediapipe/rapidocr 没有官方 PyInstaller hook，需显式收集
-        for mod in ("mediapipe", "rapidocr_onnxruntime"):
+        for mod in ("rapidocr_onnxruntime",):
             try:
                 if _iu.find_spec(mod):
                     cmd += ["--collect-all", mod]

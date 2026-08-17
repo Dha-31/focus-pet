@@ -94,7 +94,7 @@ class SizeDialog:
             vs = min((box_w - 12) / 170.0, (box_h - 12) / 170.0)
             pet_renderer.draw_procedural_pet(
                 c, cx, cy + 6, 0, self.pet.mood, self.pet.level,
-                accessory=self.pet.accessory, t=0.0, show_level=False,
+                t=0.0, show_level=False,
                 view_scale=vs)
         # 尺寸文字（框超出预览区时放顶部）
         ty = by + box_h + 14

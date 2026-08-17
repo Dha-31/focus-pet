@@ -17,14 +17,19 @@
 
 - 自定义图像适配原则：一张图=可用桌宠，任何新功能必须对自定义图像可用
 - 数据目录稳定化：`%LOCALAPPDATA%\FocusPet`，禁止改回 exe 内部
-- 隐私承诺：摄像头/截图本地处理不上传；浏览器扩展只连 127.0.0.1
+- 隐私承诺：截图/窗口信息本地处理不上传；浏览器扩展只连 127.0.0.1
 - 帮助中心数据驱动：help_data 是单一事实来源，禁止手写死文案
 - 大版本拆分：v4.0 保持 v4.0.1~v4.0.4，禁止合并回一个大版本
 - 打包产物 build/、dist/、*.spec 禁止提交 git
 - 用户数据文件（data/ 配置与日志、皮肤）禁止误删/误提交
+- **开发者功能守卫（2026-08-17）**：集中配置编辑器等开发者入口靠 `core/dev.py`（`is_dev_mode()`）
+  守卫，打包成 exe 自动隐藏；用户版禁止暴露开发者参数（汇率/阻断阈值/经验表/关键词等）
+- **渲染器**：HTML 桌宠用 Electron（`tools/electron/runtime` + `desktop/`），`main.py` 优先 Electron、
+  失败回退 Tk；点"退出"=最小化到托盘，托盘右键"退出"才真正关闭
 
 ## 4. 开发环境
 
 - Python 由 uv 管理，项目虚拟环境在 `.venv/`（已在 .gitignore）
-- 常用命令：`uv run python main.py --headless-check`；打包体验版 `uv run python tools/build_exe.py`
-- 完整版打包依赖已装好（mediapipe/opencv/rapidocr/sklearn/scipy/rembg），随时可 `--full`（用户决定暂缓）
+- 常用命令：`uv run python main.py --headless-check`；打包 `uv run python tools/build_exe.py`（已加 `--windowed` 无控制台）
+- Electron 桌宠运行时在 `tools/electron/runtime`（137MB，已 gitignore 级别：不提交 build/dist/*.spec，Electron 运行时不入库）
+- 屏幕分析依赖 rapidocr（已装）；摄像头监督已删除（无 opencv/mediapipe 依赖）；打工功能已删除（不要再加回）

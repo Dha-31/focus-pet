@@ -1,0 +1,44 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>使用帮助</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;background:#f6efe6;color:#333}
+header{background:#fff;padding:14px 20px;border-bottom:1px solid #eee}
+header h1{margin:0;font-size:18px} header p{margin:4px 0 0;color:#999;font-size:12px}
+#content{padding:14px 20px} section{background:#fff;border-radius:12px;padding:12px 18px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+section h2{margin:0 0 10px;font-size:14px;color:#e07a2f;border-bottom:1px solid #f2e8da;padding-bottom:6px}
+.item{display:flex;gap:10px;padding:6px 0;border-bottom:1px dashed #f0e6da;font-size:13px}
+.item:last-child{border-bottom:0}
+.item .n{flex:0 0 140px;font-weight:bold} .item .w{flex:0 0 260px;color:#888;font-size:12px} .item .d{flex:1}
+.badge{display:inline-block;background:#fff3e0;color:#e07a2f;border-radius:6px;padding:1px 8px;font-size:11px}
+kbd{background:#f4f4f4;border:1px solid #ddd;border-radius:4px;padding:1px 6px;font-size:12px}
+</style></head>
+<body>
+<header><h1>使用帮助</h1><p id="ver">Focus Pet</p></header>
+<div id="content"></div>
+<script>
+"use strict";
+const PORT=(window.api&&window.api.pyPort)||""; const BASE="http://127.0.0.1:"+PORT;
+async function load(){
+  try{
+    const d=await fetch(BASE+"/api/help").then(r=>r.json());
+    document.getElementById("ver").textContent="Focus Pet v"+d.version;
+    const c=document.getElementById("content"); c.innerHTML="";
+    // 功能列表
+    let sec=document.createElement("section"); sec.innerHTML="<h2>功能一览</h2>"; c.appendChild(sec);
+    d.features.forEach(f=>{
+      const it=document.createElement("div"); it.className="item";
+      it.innerHTML=`<div class="n">${f.name}</div><div class="w">${f.where||""}</div><div class="d">${f.what||""} <span class="badge">v${f.added_in}</span></div>`;
+      sec.appendChild(it);
+    });
+    // 快捷键
+    if(d.hotkeys&&d.hotkeys.length){ sec=document.createElement("section"); sec.innerHTML="<h2>快捷键</h2>"; c.appendChild(sec);
+      d.hotkeys.forEach(h=>{const it=document.createElement("div");it.className="item";it.innerHTML=`<div class="n"><kbd>${h.combo}</kbd></div><div class="d">${h.description}</div>`;sec.appendChild(it);}); }
+    // 设置说明
+    if(d.settings&&d.settings.length){ sec=document.createElement("section"); sec.innerHTML="<h2>设置说明</h2>"; c.appendChild(sec);
+      d.settings.forEach(s=>{const it=document.createElement("div");it.className="item";it.innerHTML=`<div class="n">${s.name}</div><div class="w">${s.where||""}</div><div class="d">${s.what||""}</div>`;sec.appendChild(it);}); }
+  }catch(e){document.getElementById("content").innerHTML="<p style='padding:20px;color:#c00'>无法连接桌宠</p>";}
+}
+load();
+</script>
+</body></html>

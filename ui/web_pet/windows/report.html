@@ -1,0 +1,46 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>学习报告</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;background:#f6efe6;color:#333}
+header{background:#fff;padding:14px 20px;border-bottom:1px solid #eee} header h1{margin:0;font-size:18px}
+#content{padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px}
+.stat{background:#fff;border-radius:12px;padding:18px 22px;min-width:200px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.stat .v{font-size:26px;font-weight:bold;color:#e07a2f} .stat .l{font-size:12px;color:#888;margin-top:4px}
+section{background:#fff;border-radius:12px;padding:12px 18px;margin:14px 20px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+section h2{margin:0 0 10px;font-size:14px;color:#e07a2f;border-bottom:1px solid #f2e8da;padding-bottom:6px}
+tr{border-bottom:1px solid #f5efe6} td{padding:6px 10px;font-size:12px}
+</style></head>
+<body><header><h1>学习报告</h1></header>
+<div id="stats" style="padding:14px 20px;display:flex;gap:12px"></div>
+<div id="content"></div>
+<script>
+"use strict";
+const PORT=(window.api&&window.api.pyPort)||""; const BASE="http://127.0.0.1:"+PORT;
+async function load(){
+  try{
+    const d=await fetch(BASE+"/api/report").then(r=>r.json());
+    const st=document.getElementById("stats"); st.innerHTML="";
+    [["累计专注(分)",d.total_focus],["累计分心(分)",d.total_distract],["学习会话",d.session_count],["分心事件",d.distract_count]]
+      .forEach(([l,v])=>{const s=document.createElement("div");s.className="stat";s.innerHTML=`<div class="v">${v}</div><div class="l">${l}</div>`;st.appendChild(s);});
+    const c=document.getElementById("content"); c.innerHTML="";
+    if(d.recent_distract&&d.recent_distract.length){
+      const sec=document.createElement("section"); sec.innerHTML="<h2>最近分心</h2>";
+      let t="<table style='width:100%;border-collapse:collapse'>";
+      d.recent_distract.slice().reverse().forEach(e=>{
+        t+=`<tr><td>${e.time||""}</td><td>${(e.process||"")}｜${(e.title||"").slice(0,40)}</td></tr>`;
+      });
+      t+="</table>"; sec.innerHTML+=t; c.appendChild(sec);
+    }
+    if(d.sessions&&d.sessions.length){
+      const sec=document.createElement("section"); sec.innerHTML="<h2>最近会话</h2>";
+      let t="<table style='width:100%;border-collapse:collapse'>";
+      d.sessions.slice().reverse().forEach(s=>{
+        t+=`<tr><td>${s.start||""}</td><td>${s.goal||""}</td><td>专注 ${s.focus_minutes} 分 / 分心 ${s.distract_minutes} 分</td></tr>`;
+      });
+      t+="</table>"; sec.innerHTML+=t; c.appendChild(sec);
+    }
+  }catch(e){document.getElementById("content").innerHTML="<p style='color:#c00'>无法连接桌宠</p>";}
+}
+load();
+</script></body></html>

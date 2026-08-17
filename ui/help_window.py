@@ -18,10 +18,6 @@ from ui.theme_ui import (ACCENT, ACCENT_LIGHT, BG, CARD, MUTED, TEXT,
                          accent_button, add_header, style_window)
 
 FAQ = [
-    ("摄像头没画面 / 检测不到人？",
-     "① 设置 → 摄像头开关打开；② 运行 python main.py --camera-setup 选一台能看到自己脸的设备；"
-     "③ 确认已装 opencv-python mediapipe 并运行 python tools/fetch_models.py 下载模型。"
-     "画面只在本地处理，不上传。"),
     ("浏览器扩展显示「未连接」？",
      "① 确认 Focus Pet 正在运行；② 设置 → 浏览器扩展桥接 = 开（默认端口 18765）；"
      "③ 改完重启桌宠；④ 扩展里点刷新/重新加载。"),
@@ -178,11 +174,13 @@ class HelpWindow:
         about = [
             ("版本", f"Focus Pet v{help_data.VERSION}"),
             ("定位", "陪你学习、也监督你学习的桌面养成宠物"),
-            ("隐私承诺", "摄像头画面、截图、窗口信息全部本地处理，不保存、不上传；"
+            ("隐私承诺", "截图、窗口信息全部本地处理，不保存、不上传；"
                          "浏览器扩展只连 127.0.0.1 本地桥接。"),
             ("开源", "项目开源，文档见 docs/ 目录（README / 设计文档 / 总结文档）"),
-            ("开发者", "打开集中配置编辑器：右键桌宠 → 设置…，或 python main.py --settings"),
         ]
+        from core.dev import is_dev_mode
+        if is_dev_mode():
+            about.append(("开发者", "打开集中配置编辑器：右键桌宠 → 设置…，或 python main.py --settings"))
         for k, v in about:
             row = tk.Frame(inner, bg=CARD, padx=12, pady=8)
             row.pack(fill="x")

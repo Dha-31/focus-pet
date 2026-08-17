@@ -37,10 +37,6 @@ DEFAULTS = {
         "base_reward": 10,      # 每日打卡基础奖励金币
         "streak_bonus": 2,      # 连续签到额外加成（连续第 N 天 +N*2 币）
     },
-    "work": {
-        "rate_per_min": 2.0,    # 打工汇率（币/分钟）
-        "options": [30, 60, 120],   # 可选打工时长（分钟）
-    },
     "feed": {
         "items": [
             {"id": "fish", "name": "小鱼干", "price": 10, "affinity": 6},
@@ -108,12 +104,6 @@ SETTINGS_SCHEMA = [
      "label": "升级所需累计专注(秒)", "type": "list",
      "desc": "第 N 个值 = 升到 Lv.N+1 所需累计专注秒数，逗号分隔"},
     # 商店价格
-    {"path": "shop.prices.flower", "file": "settings", "category": "商店", "label": "小花价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.bow_pink", "file": "settings", "category": "商店", "label": "蝴蝶结价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.scarf", "file": "settings", "category": "商店", "label": "围巾价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.hat_red", "file": "settings", "category": "商店", "label": "小红帽价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.glasses", "file": "settings", "category": "商店", "label": "眼镜价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.crown_gold", "file": "settings", "category": "商店", "label": "金皇冠价格", "type": "int", "min": 0, "max": 1000},
     {"path": "shop.prices.rug", "file": "settings", "category": "商店", "label": "地毯价格", "type": "int", "min": 0, "max": 1000},
     {"path": "shop.prices.lamp", "file": "settings", "category": "商店", "label": "台灯价格", "type": "int", "min": 0, "max": 1000},
     {"path": "shop.prices.plant", "file": "settings", "category": "商店", "label": "绿植价格", "type": "int", "min": 0, "max": 1000},
@@ -128,13 +118,6 @@ SETTINGS_SCHEMA = [
     {"path": "checkin.streak_bonus", "file": "settings", "category": "打卡",
      "label": "连续签到加成/天", "type": "int", "min": 0, "max": 100, "step": 1,
      "desc": "连续第 N 天打卡额外 +N*此值 金币"},
-    # 打工
-    {"path": "work.rate_per_min", "file": "settings", "category": "打工",
-     "label": "打工汇率（币/分钟）", "type": "float", "min": 0.1, "max": 20.0, "step": 0.5,
-     "desc": "宠物打工每分钟赚的专注币"},
-    {"path": "work.options", "file": "settings", "category": "打工",
-     "label": "可选打工时长(分钟)", "type": "list",
-     "desc": "打工菜单里的时长选项，逗号分隔"},
     # 空间场景
     {"path": "space.scenes", "file": "settings", "category": "空间",
      "label": "可用场景列表", "type": "list",
@@ -167,9 +150,6 @@ CONFIG_SCHEMA = [
     {"path": "focus_assist.enabled", "file": "config", "category": "通知屏蔽", "label": "学习时屏蔽系统通知", "type": "bool", "desc": "开始学习自动开 Windows 专注助手（微信/QQ 等不弹通知、不闪烁、不响），结束恢复"},
     {"path": "extension.enabled", "file": "config", "category": "扩展", "label": "浏览器扩展桥接", "type": "bool"},
     {"path": "extension.port", "file": "config", "category": "扩展", "label": "桥接端口", "type": "int", "min": 1024, "max": 65535},
-    {"path": "camera.enabled", "file": "config", "category": "摄像头", "label": "摄像头开关", "type": "bool"},
-    {"path": "camera.device_index", "file": "config", "category": "摄像头", "label": "设备编号", "type": "int", "min": 0, "max": 10},
-    {"path": "camera.interval_seconds", "file": "config", "category": "摄像头", "label": "采样间隔(秒)", "type": "float", "min": 0.2, "max": 10, "step": 0.2},
     {"path": "screen_analysis.enabled", "file": "config", "category": "截图分析", "label": "截图分析开关", "type": "bool"},
     {"path": "screen_analysis.interval_seconds", "file": "config", "category": "截图分析", "label": "分析间隔(秒)", "type": "int", "min": 5, "max": 120},
 ]

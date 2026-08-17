@@ -1,0 +1,179 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>我的空间</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;background:#f6efe6;color:#333;overflow:hidden}
+header{background:#fff;padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px}
+header h1{margin:0;font-size:16px;flex:1}
+select{padding:5px 8px;border-radius:6px;border:1px solid #ddd;font-size:13px}
+#tip{font-size:12px;color:#999}
+#wrap{position:relative;margin:10px 16px;background:#fff;border-radius:12px;overflow:hidden}
+canvas{display:block;width:100%}
+</style></head>
+<body>
+<header><h1>我的空间</h1>
+<select id="sceneSel"></select>
+<span id="tip">拖动家具和小猫到任意位置，自动保存</span>
+</header>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<script>
+"use strict";
+const PORT=(window.api&&window.api.pyPort)||""; const BASE="http://127.0.0.1:"+PORT;
+const DW=1000, DH=940, FLOOR=0.35, FY=DH*FLOOR;   // 分界线在约 1/3 处，地面更大
+const EMOJI={"rug":"🟫","lamp":"🛋️","plant":"🪴","window":"🪟","table":"🪑","bookshelf":"📚","sofa":"🛋️",
+"fridge":"🧊","tv":"📺","clock":"🕰️","armchair":"💺","star_rug":"🌌","moon_lamp":"🌙","planet":"🪐","telescope":"🔭",
+"star_desk":"🪩","star_chair":"🪑","star_books":"📚","aurora":"🌠","beach_umbrella":"⛱️","beach_chair":"🏖️","sandcastle":"🏰","shell":"🐚",
+"fish_tank":"🐠","hammock":"🪢","sea_rug":"🏝️","crab":"🦀","tree":"🌲","mushroom":"🍄","log":"🪵","birdhouse":"🏠",
+"swing":"🪁","stump_table":"🪑","beehive":"🐝","forest_lamp":"🏮",
+"tent":"⛺","campfire":"🔥","picnic":"🧺","camp_lamp":"🏮","camp_chair":"🪑","cooler":"🧊"};
+const SCENES={
+ cozy:{name:"温馨小屋",wall:"#fdf1dd",floor:"#d9b380",line:"#c49a66"},
+ star:{name:"星空田野",wall:"#1c2340",floor:"#7fae5a",line:"#6d9a4a"},
+ sea:{name:"海边",wall:"#bfe3ff",floor:"#ecd9a0",line:"#d8c37f"},
+ forest:{name:"森林",wall:"#d9eec9",floor:"#8fb064",line:"#7da054"},
+};
+let state={scene:"cozy",scenes:{},furniture_pos:{},pet_pos:[500,600],placed:{},furniture:[]};
+let drag=null, canvas, ctx, scale=1;
+
+async function load(){
+  for(let attempt=0; attempt<3; attempt++){
+    try{
+      state=await fetch(BASE+"/api/space").then(r=>r.json());
+      break;
+    }catch(e){
+      if(attempt===2){ document.body.innerHTML="<p style='padding:20px;color:#c00'>无法连接桌宠</p>"; return; }
+      await new Promise(r=>setTimeout(r,400));
+    }
+  }
+  state.pet_pos=Array.isArray(state.pet_pos)?state.pet_pos:[500,600];
+  buildSel(); setupCanvas(); draw();
+}
+function buildSel(){
+  const s=document.getElementById("sceneSel"); s.innerHTML="";
+  Object.entries(state.scenes).forEach(([id,name])=>{
+    const o=document.createElement("option"); o.value=id; o.textContent=name; s.appendChild(o);
+  });
+  s.value=state.scene; s.onchange=()=>{ state.scene=s.value; draw(); save(); };
+}
+function setupCanvas(){
+  canvas=document.getElementById("cv"); if(!canvas) return;
+  ctx=canvas.getContext("2d");
+  const wrap=document.getElementById("wrap"); if(!wrap){ setTimeout(setupCanvas,100); return; }
+  const w=wrap.clientWidth; if(w<=0){ setTimeout(setupCanvas,100); return; }
+  scale=w/DW; canvas.width=w; canvas.height=DH*scale;
+  canvas.addEventListener("mousedown",onDown); window.addEventListener("mousemove",onMove); window.addEventListener("mouseup",onUp);
+}
+function toDesign(e){ const r=canvas.getBoundingClientRect(); return [(e.clientX-r.left)/scale,(e.clientY-r.top)/scale]; }
+function S(){ return ctx; }
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const sc=SCENES[state.scene]||SCENES.cozy, fy=FY;
+  // 墙
+  ctx.fillStyle=sc.wall; ctx.fillRect(0,0,DW,fy);
+  // 地板
+  ctx.fillStyle=sc.floor; ctx.fillRect(0,fy,DW,DH-fy);
+  ctx.strokeStyle=sc.line; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,FY*scale); ctx.lineTo(DW*scale,FY*scale); ctx.stroke();
+  // 地板纹理（各场景不同）
+  if(state.scene==="cozy"){ // 木地板横条
+    ctx.strokeStyle="rgba(0,0,0,.08)"; ctx.lineWidth=1;
+    for(let y=fy+40;y<DH;y+=46){ ctx.beginPath(); ctx.moveTo(0,y*scale); ctx.lineTo(DW*scale,y*scale); ctx.stroke(); }
+  } else if(state.scene==="star"){ // 草地草丛
+    ctx.font="16px Segoe UI Emoji";
+    for(let x=30;x<DW;x+=70){ ctx.fillText("🌾",x*scale,(fy+40)*scale); }
+  } else if(state.scene==="sea"){ // 沙地贝壳
+    ctx.font="18px Segoe UI Emoji";
+    for(let x=40;x<DW;x+=90){ ctx.fillText("🐚",x*scale,(fy+60+((x/90)%2)*50)*scale); }
+  } else { // 森林草丛/蘑菇
+    ctx.font="18px Segoe UI Emoji";
+    for(let x=30;x<DW;x+=80){ ctx.fillText("🍄",x*scale,(fy+55+((x/80)%2)*45)*scale); }
+  }
+  drawWallDeco(sc);
+  // 家具
+  (state.placed[state.scene]||[]).forEach((fid,i)=>{
+    const f=state.furniture.find(x=>x.id===fid); if(!f) return;
+    const [dx,dy]=state.furniture_pos[fid]||[180+i*100,320+i*60];
+    ctx.font="110px Segoe UI Emoji"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(EMOJI[fid]||"🪑",dx*scale,dy*scale);
+  });
+  // 小猫：永远最后画 = 最上层，任何家具/装饰都不能盖住它
+  ctx.font="110px Segoe UI Emoji";
+  ctx.fillText("🐱",state.pet_pos[0]*scale,state.pet_pos[1]*scale);
+}
+function drawWallDeco(sc){
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  if(state.scene==="cozy"){ ctx.font="44px Segoe UI Emoji"; ctx.fillText("🖼️",830*scale,110*scale); }
+  else if(state.scene==="star"){ // 夜空：月亮 + 星星
+    ctx.font="52px Segoe UI Emoji"; ctx.fillText("🌙",130*scale,120*scale);
+    ctx.font="20px Segoe UI Emoji";
+    for(const [sx,sy] of [[240,70],[330,150],[430,60],[540,130],[650,80],[760,160],[880,90]]){
+      ctx.fillText("✨",sx*scale,sy*scale);
+    }
+  }
+  else if(state.scene==="sea"){ // 太阳 + 云 + 海里的鱼
+    ctx.font="50px Segoe UI Emoji"; ctx.fillText("🌞",620*scale,100*scale);
+    ctx.font="30px Segoe UI Emoji"; ctx.fillText("☁️",300*scale,80*scale); ctx.fillText("☁️",450*scale,140*scale);
+    ctx.font="26px Segoe UI Emoji"; ctx.fillText("🐟",750*scale,180*scale); ctx.fillText("🐠",820*scale,120*scale);
+  }
+  else { // 森林：远山 + 层层松树 + 灌木 + 萤火虫
+    // 远处山丘（绿色半圆）
+    ctx.fillStyle="rgba(125,168,100,.5)";
+    ctx.beginPath(); ctx.arc(240*scale, FY*scale+30, 270*scale, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.arc(730*scale, FY*scale+40, 310*scale, Math.PI, 0); ctx.fill();
+    // 远处浅色树影
+    ctx.fillStyle="rgba(96,150,84,.45)";
+    for(const [tx,ty,tr] of [[110,330,60],[290,322,70],[520,332,55],[700,320,75],[890,330,60]]){
+      ctx.beginPath(); ctx.arc(tx*scale, (ty+tr)*scale, tr*scale, Math.PI, 0); ctx.fill();
+    }
+    // 松树（三层三角形）
+    function pine(tx, ty, s, base){
+      ctx.fillStyle=base;
+      ctx.beginPath(); ctx.moveTo(tx*scale, (ty-92*s)*scale); ctx.lineTo((tx+36*s)*scale, (ty-18*s)*scale); ctx.lineTo((tx-36*s)*scale, (ty-18*s)*scale); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(tx*scale, (ty-64*s)*scale); ctx.lineTo((tx+30*s)*scale, (ty-4*s)*scale); ctx.lineTo((tx-30*s)*scale, (ty-4*s)*scale); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(tx*scale, (ty-38*s)*scale); ctx.lineTo((tx+24*s)*scale, (ty+10*s)*scale); ctx.lineTo((tx-24*s)*scale, (ty+10*s)*scale); ctx.closePath(); ctx.fill();
+      ctx.fillStyle="rgba(96,64,32,.85)";
+      ctx.fillRect((tx-5*s)*scale, (ty+10*s)*scale, 10*s*scale, 14*s*scale);
+    }
+    for(const [tx,ty,s,c] of [[120,342,1.25,"#357a40"],[235,352,0.95,"#4aa858"],[390,338,1.5,"#2f6f38"],[520,350,1.1,"#4aa858"],[645,336,1.35,"#357a40"],[785,352,0.9,"#4aa858"],[905,342,1.3,"#2f6f38"]]){
+      pine(tx,ty,s,c);
+    }
+    // 灌木丛
+    ctx.fillStyle="#5da055";
+    for(const [bx,by,br] of [[70,352,26],[300,358,30],[470,354,24],[625,358,28],[835,354,26]]){
+      ctx.beginPath(); ctx.arc(bx*scale, by*scale, br*scale, 0, Math.PI*2); ctx.fill();
+    }
+    // 萤火虫（发光小点）
+    for(const [fx,fy] of [[160,118],[285,205],[420,88],[565,175],[720,108],[865,202],[960,140]]){
+      ctx.fillStyle="rgba(255,236,150,.35)";
+      ctx.beginPath(); ctx.arc(fx*scale, FY*scale, 8*scale, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle="#fff0a0";
+      ctx.beginPath(); ctx.arc(fx*scale, FY*scale, 3*scale, 0, Math.PI*2); ctx.fill();
+    }
+  }
+}
+function hit(e){
+  const [x,y]=toDesign(e);
+  // 猫永远是最上层：优先判定小猫，其次才看家具
+  if(Math.hypot(x-state.pet_pos[0],y-state.pet_pos[1])<95) return {kind:"pet"};
+  const items=(state.placed[state.scene]||[]).map((fid,i)=>[fid,state.furniture_pos[fid]||[180+i*100,320+i*60]]);
+  let best=null,bd=75;
+  items.forEach(([fid,p])=>{ const d=Math.hypot(x-p[0],y-p[1]); if(d<bd){bd=d;best={kind:"fur",fid};} });
+  return best;
+}
+function onDown(e){ drag=hit(e); }
+function onMove(e){
+  if(!drag) return;
+  const [x,y]=toDesign(e);
+  if(drag.kind==="fur") state.furniture_pos[drag.fid]=[Math.max(20,Math.min(DW-20,x)),Math.max(20,Math.min(DH-20,y))];
+  else state.pet_pos=[Math.max(30,Math.min(DW-30,x)),Math.max(30,Math.min(DH-30,y))];
+  draw();
+}
+function onUp(){ if(drag){ save(); drag=null; } }
+async function save(){
+  try{
+    await fetch(BASE+"/api/space",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({scene:state.scene,furniture_pos:state.furniture_pos,pet_pos:state.pet_pos})});
+  }catch(e){}
+}
+load();
+</script></body></html>

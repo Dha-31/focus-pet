@@ -7,6 +7,7 @@
   python main.py --log            # 查看分心日志时间线
 """
 import argparse
+import os
 import sys
 import threading
 import time
@@ -35,8 +36,7 @@ def headless_check():
     cfg = load_config()
     print(f"配置: 番茄钟开启={cfg['pomodoro']['enabled']}，"
           f"强制关闭开启={cfg['blocking']['force_close_enabled']}，"
-          f"浏览器扩展开启={cfg['extension']['enabled']}，"
-          f"摄像头开启={cfg['camera']['enabled']}")
+          f"浏览器扩展开启={cfg['extension']['enabled']}")
 
     rules = RuleEngine()
     cases = [
@@ -110,9 +110,8 @@ def print_status():
     print(f"  桌宠: Lv.{_ps.level} | 模式: {'考试冲刺' if _ps.mode == 'exam' else '日常自习'} | 好感度 {_ps.affinity:.0f} | 累计专注 {_ps.total_focus_minutes:.0f} 分钟")
     from core.economy import Inventory
     _inv = Inventory()
-    print(f"  专注币: {_inv.coins:.0f} | 已购装饰 {len(_inv.owned_accessories)} 件 / 家具 {len(_inv.owned_furniture)} 件")
+    print(f"  专注币: {_inv.coins:.0f} | 已购家具 {len(_inv.owned_furniture)} 件")
     print(f"  浏览器扩展: {'开（端口 %d）' % cfg['extension']['port'] if cfg['extension']['enabled'] else '关'}")
-    print(f"  摄像头: {'开（设备 %d，后端见运行日志）' % cfg['camera']['device_index'] if cfg['camera']['enabled'] else '关'}")
     print("== 最近会话 ==")
     logs = StudySession.read_log(3)
     for log in logs:
@@ -175,9 +174,7 @@ def run_app():
     original_force_close = bool(cfg["blocking"]["force_close_enabled"])
     # v4.0.1：每日打卡 / 工作时钟 / 小游戏兑换
     from core.checkin import CheckIn
-    from core.work import WorkClock
     checkin = CheckIn()
-    work_clock = WorkClock()
 
     MODE_TIERS = settings.get("blocking.tiers") or {
         "relaxed": [10, 30, 60, 120],
@@ -214,22 +211,6 @@ def run_app():
     screen_analysis_enabled = bool(cfg["screen_analysis"]["enabled"])
     screen_interval = max(5, float(cfg["screen_analysis"]["interval_seconds"]))
     last_screen_analyze = [0.0]
-    # 摄像头监督（可选，v2）：后端在后台线程创建，不阻塞桌宠启动
-    camera_monitor = None
-    camera_error_shown = [False]
-    if cfg["camera"]["enabled"]:
-        try:
-            from camera.camera_monitor import CameraMonitor
-            camera_monitor = CameraMonitor(
-                backend=None,
-                device_index=int(cfg["camera"]["device_index"]),
-                interval=float(cfg["camera"]["interval_seconds"]),
-            )
-            camera_monitor.start()
-            print("[camera] 摄像头线程已启动（模型加载在后台进行，稍后生效）")
-        except Exception as exc:
-            print("[camera] 摄像头初始化失败：", exc)
-
     latest_browser_url = [None]   # 最近一次浏览器 URL（教宠物时精确记录解封）
 
     def on_teach(info):
@@ -408,55 +389,51 @@ def run_app():
         logbook.log_event("feed", f"投喂 {item.get('name')} 好感+{aff:.0f}")
         pet.celebrate(f"好好吃！好感 +{aff:.0f}！")
 
-    def on_work(minutes):
-        """打工：开始工作时钟（时间到自动结算，见 check_work）。"""
-        if work_clock.active:
-            pet.say("已经在打工啦，别急~")
-            return
-        if work_clock.start(minutes):
-            logbook.log_event("work_start", f"开始打工 {minutes} 分钟")
-            pet.say(f"我去上班啦！{minutes} 分钟后记得来领工资~")
-        else:
-            pet.say("现在不能打工哦")
-
-
-    def check_work():
-        """主线程轮询工作时钟：更新头顶徽章、到期自动结算。"""
-        try:
-            if work_clock.active:
-                if work_clock.is_done():
-                    base = work_clock.finish()
-                    if base:
-                        coins = base * (1.0 + (pet_state.level - 1) * 0.05)
-                        inventory.add_coins(coins)
-                        logbook.log_event("work_done", f"打工完成 +{coins:.0f} 币")
-                        pet.set_work(False)
-                        pet.celebrate(f"下班啦！赚了 {coins:.0f} 专注币！")
-                else:
-                    pet.set_work(True, work_clock.remaining())
-            else:
-                pet.set_work(False)
-        except Exception as exc:
-            print("[work] 结算异常：", exc)
-        try:
-            pet.root.after(5000, check_work)
-        except Exception:
-            pass
-
-    pet = PetApp(cfg, mode=pet_state.mode, inventory=inventory,
-                 on_teach=on_teach,
-                 on_start_study=on_start_study, on_end_study=on_end_study,
-                 on_toggle_pomodoro=on_toggle_pomodoro,
-                 on_mode_change=on_toggle_mode, on_exit=on_exit,
-                 on_open_achievements=on_open_achievements,
-                 on_open_report=on_open_report,
-                 on_open_settings=on_open_settings,
-                 tray_enabled=True,
-                 on_toggle_dnd=on_toggle_dnd,
-                 on_toggle_mini=on_toggle_mini,
-                 on_open_help=on_open_help,
-                 on_pet=on_pet, on_checkin=on_checkin, on_feed=on_feed,
-                 on_work=on_work, on_open_rules=on_open_rules)
+    # 渲染器：优先 Electron（HTML 透明桌宠），失败回退 Tk（卡顿/不可用/用户切换）
+    is_electron = False
+    pet = None
+    try:
+        from ui.web_pet.pet_electron import ElectronPetWindow, ELECTRON_EXE
+        if os.path.exists(ELECTRON_EXE):
+            pet = ElectronPetWindow(
+                callbacks={
+                    "start_study": on_start_study,
+                    "end_study": on_end_study,
+                    "toggle_pomodoro": on_toggle_pomodoro,
+                    "mode": on_toggle_mode,
+                    "open_achievements": on_open_achievements,
+                    "open_report": on_open_report,
+                    "open_settings": on_open_settings,
+                    "open_rules": on_open_rules,
+                    "toggle_dnd": on_toggle_dnd,
+                    "toggle_mini": on_toggle_mini,
+                    "open_help": on_open_help,
+                    "pet": on_pet,
+                    "checkin": on_checkin,
+                    "feed": on_feed,
+                },
+                inventory=inventory, mode=pet_state.mode)
+            pet.start()
+            is_electron = True
+            print("[render] 使用 Electron 桌宠（HTML）")
+    except Exception as exc:
+        print("[render] Electron 初始化失败：", exc)
+    if pet is None:
+        print("[render] 回退 Tk 桌宠")
+        pet = PetApp(cfg, mode=pet_state.mode, inventory=inventory,
+                     on_teach=on_teach,
+                     on_start_study=on_start_study, on_end_study=on_end_study,
+                     on_toggle_pomodoro=on_toggle_pomodoro,
+                     on_mode_change=on_toggle_mode, on_exit=on_exit,
+                     on_open_achievements=on_open_achievements,
+                     on_open_report=on_open_report,
+                     on_open_settings=on_open_settings,
+                     tray_enabled=True,
+                     on_toggle_dnd=on_toggle_dnd,
+                     on_toggle_mini=on_toggle_mini,
+                     on_open_help=on_open_help,
+                     on_pet=on_pet, on_checkin=on_checkin, on_feed=on_feed,
+                     on_open_rules=on_open_rules)
 
     sounds.set_muted(pet.dnd)   # 免打扰初始状态同步给音效
 
@@ -469,32 +446,37 @@ def run_app():
         except Exception:
             pass
     # v4.0.1：启动工作结算轮询 + 今日未打卡提醒
-    pet.root.after(3000, check_work)
     _done_today, _, _ = checkin.status()
-    if not _done_today:
-        pet.root.after(2500, lambda: pet.say("新的一天！记得右键「每日打卡」领金币哦~"))
-
-    # 系统托盘（v3.5）：失败也不影响桌宠
-    tray = None
-    try:
-        from ui.tray import TrayIcon
-        tray = TrayIcon(
-            tooltip="Focus Pet 学习监督桌宠",
-            on_start=lambda: pet._menu_start_study(),
-            on_end=lambda: pet._menu_end_study(),
-            on_toggle=lambda: pet.toggle_visible(),
-            on_quit=lambda: pet._menu_exit(),
-            on_dnd=on_toggle_dnd,
-            on_mini=on_toggle_mini)
-        if tray.is_ok():
-            print("[tray] 系统托盘已启用：双击显示/隐藏，右键菜单")
+    # 启动问候：无论今天是否已打卡，桌宠启动后都会说话（已打卡则普通问候）
+    def _startup_greeting():
+        if not _done_today:
+            pet.say("新的一天！记得右键「每日打卡」领金币哦~")
         else:
+            pet.say("你好呀，我回来啦～今天也要一起加油哦！")
+    pet.root.after(2500, _startup_greeting)
+
+    # 系统托盘：Electron 渲染时用 Electron 自带托盘；Tk 渲染时才建 main.py 托盘
+    tray = None
+    if not is_electron:
+        try:
+            from ui.tray import TrayIcon
+            tray = TrayIcon(
+                tooltip="Focus Pet 学习监督桌宠",
+                on_start=lambda: pet._menu_start_study(),
+                on_end=lambda: pet._menu_end_study(),
+                on_toggle=lambda: pet.toggle_visible(),
+                on_quit=lambda: pet._menu_exit(),
+                on_dnd=on_toggle_dnd,
+                on_mini=on_toggle_mini)
+            if tray.is_ok():
+                print("[tray] 系统托盘已启用：双击显示/隐藏，右键菜单")
+            else:
+                tray = None
+                pet.tray_enabled = False
+        except Exception as exc:
+            print("[tray] 托盘不可用:", exc)
             tray = None
             pet.tray_enabled = False
-    except Exception as exc:
-        print("[tray] 托盘不可用:", exc)
-        tray = None
-        pet.tray_enabled = False
     if bridge_error:
         pet.show_error(f"浏览器扩展桥接启动失败：{bridge_error}")
 
@@ -574,30 +556,6 @@ def run_app():
                     latest_browser_url[0] = url
 
             cat = rules.classify(title=info["title"], process=info["process"], url=url)
-
-            # ---- 摄像头增强判定（可选，v2）----
-            cam = camera_monitor.get_latest() if camera_monitor else None
-            if cam and cam.get("error") and not camera_error_shown[0]:
-                camera_error_shown[0] = True
-                print("[camera]", cam["error"])
-                pet.show_error("摄像头出问题了，先不盯镜头啦")
-            if cam and not cam.get("error") and cam.get("backend") != "none":
-                if not cam.get("person_present"):
-                    # 人不在：不计专注、不生气、不阻断，宠物睡觉
-                    meter.update(False, poll)
-                    pet.set_mood(0)
-                    pet.set_sleeping(True)
-                    blocker.reset()
-                    session.tick(False, poll)
-                    if last_cat != "away":
-                        pet.say("你去哪了？回来学习呀~")
-                        logbook.log_event("away", "人不在摄像头前")
-                    last_cat = "away"
-                    continue
-                if cam.get("off_screen_study"):
-                    cat = "study"          # 纸上写字 / 看书 = 学习
-                elif cam.get("phone_suspicion"):
-                    cat = "distraction"    # 疑似玩手机
 
             # ---- 截图画面分析（v2.5）：快速通道判定不了时，本地看画面 ----
             screen_derived = False
@@ -695,11 +653,6 @@ def run_app():
                         pet.say("这个画面看起来不像在学习哦~（误判就右键教宠物）")
                     blocker.handle(tier, info["hwnd"], info["title"])
                     blocker.tick(poll)
-                elif cam and cam.get("phone_suspicion"):
-                    # 玩手机：关不了手机，只能提醒
-                    if cat != last_cat:
-                        pet.say("别玩手机啦！")
-                    blocker.reset()
                 elif is_browser and ext_enabled:
                     # 浏览器标签页交给扩展拦截，桌宠只提醒不暴力关窗口
                     if cat != last_cat:
@@ -780,41 +733,6 @@ def open_settings():
     SettingsEditor(root, pet=None)
     root.mainloop()
 
-def camera_setup():
-    """打开摄像头设置窗口（图形界面）：实时预览 + 选择前置/后置 + 保存。"""
-    try:
-        from ui.camera_setup import run
-    except Exception as exc:
-        print("无法打开摄像头设置窗口：", exc)
-        sys.exit(1)
-    run()
-
-def camera_check():
-    """摄像头自检：打开摄像头跑约 5 秒，打印每一帧的状态。"""
-    from core.config import load_config
-    from camera.backends import create_backend
-    from camera.camera_monitor import CameraMonitor
-
-    cfg = load_config()
-    backend = create_backend()
-    if backend is None:
-        print("未安装 opencv/mediapipe。请先运行: pip install opencv-python mediapipe")
-        sys.exit(1)
-    print(f"后端: {backend.name}，设备索引: {cfg['camera']['device_index']}")
-    mon = CameraMonitor(backend, device_index=int(cfg["camera"]["device_index"]), interval=0.5)
-    mon.start()
-    try:
-        for _ in range(10):
-            time.sleep(0.5)
-            st = mon.get_latest()
-            if st.get("error"):
-                print("摄像头错误:", st["error"])
-                break
-            print(st)
-    finally:
-        mon.stop()
-    print("摄像头自检结束")
-
 def _enable_dpi_awareness():
     """开启 DPI 感知：让 Tk 界面在 Windows 缩放下文字清晰（v3.7.1）。"""
     if sys.platform != "win32":
@@ -833,8 +751,6 @@ def main():
     _enable_dpi_awareness()
     parser = argparse.ArgumentParser(description="Focus Pet - 陪你学习也监督你学习")
     parser.add_argument("--headless-check", action="store_true", help="无界面自检核心逻辑")
-    parser.add_argument("--camera-check", action="store_true", help="摄像头自检（约 5 秒）")
-    parser.add_argument("--camera-setup", action="store_true", help="打开摄像头设置窗口（图形界面）")
     parser.add_argument("--screen-check", action="store_true", help="截图画面分析自检")
     parser.add_argument("--settings", action="store_true", help="打开集中配置编辑器（不用先开桌宠）")
     parser.add_argument("--import-theme", metavar="ZIP", help="导入主题包 zip 并设为当前形象")
@@ -844,16 +760,16 @@ def main():
 
     if args.headless_check:
         headless_check()
-    elif args.camera_check:
-        camera_check()
-    elif args.camera_setup:
-        camera_setup()
     elif args.screen_check:
         screen_check()
     elif args.import_theme:
         import_theme_cli(args.import_theme)
     elif args.settings:
-        open_settings()
+        from core.dev import is_dev_mode
+        if is_dev_mode():
+            open_settings()
+        else:
+            print("集中配置编辑器仅开发模式可用（用户版不提供）")
     elif args.status:
         print_status()
     elif args.log:

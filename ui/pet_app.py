@@ -34,7 +34,7 @@ from ui.skin_face import detect_face_meta
 
 TRANSPARENT_BG = "#010203"
 DESIGN_SIZE = 170          # 猫画稿的设计基准（窗口 170 时猫占满；窗口变大猫等比放大，矢量不糊）
-NORMAL_SIZE = (480, 340)   # 默认桌宠窗口大小（加宽给右侧气泡留空间）
+NORMAL_SIZE = (600, 360)   # 默认桌宠窗口大小（加宽给右侧气泡留空间）
 MINI_SIZE = (90, 90)
 BLOCK_SIZE = (460, 320)
 
@@ -45,7 +45,7 @@ class PetApp:
                  on_mode_change=None, on_exit=None, on_open_achievements=None,
                  on_open_report=None, on_open_settings=None, tray_enabled=False,
                  on_toggle_dnd=None, on_toggle_mini=None, on_open_help=None,
-                 on_pet=None, on_checkin=None, on_feed=None, on_work=None,
+                 on_pet=None, on_checkin=None, on_feed=None,
                  on_open_rules=None):
         self.on_teach = on_teach
         self.on_start_study = on_start_study
@@ -58,7 +58,6 @@ class PetApp:
         self.on_pet = on_pet                  # 摸头（单击）
         self.on_checkin = on_checkin          # 每日打卡
         self.on_feed = on_feed                # 投喂
-        self.on_work = on_work                # 打工（工作时钟）
         self.on_mode_change = on_mode_change
         self.on_exit = on_exit
         self.on_open_achievements = on_open_achievements
@@ -73,9 +72,8 @@ class PetApp:
         self.pomodoro_enabled = bool(config["pomodoro"]["enabled"])
         self.bubble_text = ""
         self._bubble_until = 0.0
-        self.work_active = False              # 打工中（v4.0.1）
-        self.work_remaining = 0.0
         self._last_pet_ts = 0.0               # 摸头冷却
+        self._pet_meta = None                 # 最近一次绘制的小猫区域（点击区域->动作用）
         self._t = 0.0
         self._blink_period = 3.0
         self.latest_info = None
@@ -103,10 +101,10 @@ class PetApp:
 
         self._queue = queue.Queue()
         self.theme_name = config.get("pet", {}).get("skin", "default")
+        self.skin = self.theme_name   # 别名（商店/空间判断是否自定义图像）
         self._skin_img_cache = {}            # 状态 -> PhotoImage
         self._skin_disp = {}                 # 状态 -> 缩放后的显示图
         self.inventory = inventory if inventory is not None else Inventory()
-        self.accessory = self.inventory.equipped_accessory
         self.skin_face = self._load_skin_face(config)
         self._space_win = None
         # "你在看我吗"状态
@@ -177,6 +175,7 @@ class PetApp:
         except Exception:
             return
         self.theme_name = cfg.get("pet", {}).get("skin", "default")
+        self.skin = self.theme_name
         self._skin_img_cache.clear()
         self._skin_disp.clear()
         self.skin_face = self._load_skin_face(cfg)
@@ -316,17 +315,33 @@ class PetApp:
             rx, ry, _, _ = self._drag
             # 位移很小 = 单击摸头（区分拖动窗口）
             if abs(event.x_root - rx) < 6 and abs(event.y_root - ry) < 6:
-                self._pet_click()
+                self._pet_click(event.x, event.y)
         self._drag = None
         self._normal_pos = (self.root.winfo_x(), self.root.winfo_y())
         self._save_position()   # 位置记忆
 
-    def _pet_click(self):
-        """单击桌宠 = 摸头：好感 +1（冷却 3 秒防连点），宠物开心反馈。"""
+    def _pet_click(self, ex=None, ey=None):
+        """单击桌宠：点头部 = 摸头（好感 +1），点身体 = 戳一戳（不同反应）。冷却 3 秒防连点。"""
         now = time.time()
         if now - self._last_pet_ts < 3.0:
             return
+        zone = "head"
+        meta = getattr(self, "_pet_meta", None)
+        if ex is not None and ey is not None and meta:
+            try:
+                hx, hy, hr = meta["head"]
+                if (ex - hx) ** 2 + (ey - hy) ** 2 > hr * hr:
+                    x1, y1, x2, y2 = meta["box"]
+                    if x1 <= ex <= x2 and y1 <= ey <= y2:
+                        zone = "body"
+            except Exception:
+                zone = "head"
         self._last_pet_ts = now
+        if zone == "body":
+            # 戳身体：不加好感，只做反应
+            self.say("嘿嘿，别戳我啦！痒痒的~")
+            self.play_state("celebrate", 0.8)
+            return
         if self.on_pet:
             self.on_pet()
         self.say("呼噜呼噜~ 好舒服！")
@@ -379,7 +394,6 @@ class PetApp:
         fun_menu = tk.Menu(menu, tearoff=0)
         fun_menu.add_command(label="每日打卡…", command=self._menu_checkin)
         fun_menu.add_command(label="投喂…", command=self._menu_feed)
-        fun_menu.add_command(label="打工…", command=self._menu_work)
         fun_menu.add_command(label="商店…", command=self._open_shop)
         fun_menu.add_command(label="我的空间…", command=self._open_space)
         fun_menu.add_command(label="成就…", command=self._menu_achievements)
@@ -474,8 +488,8 @@ class PetApp:
         from ui import window_manager
         from ui.shop_window import ShopWindow
         win = ShopWindow(self.root, self.inventory,
-                         on_equip=lambda aid: self.equip_accessory(aid),
-                         on_place=lambda fid: self.refresh_space())
+                         on_place=lambda fid: self.refresh_space(),
+                         skin=self.skin)
         window_manager.open(win.root)
 
     def _open_space(self):
@@ -487,10 +501,6 @@ class PetApp:
     def _open_size_dialog(self):
         from ui.size_dialog import SizeDialog
         SizeDialog(self)
-
-    def equip_accessory(self, aid):
-        self.accessory = aid
-        self.say("好看！")
 
     def refresh_space(self):
         win = getattr(self, "_space_win", None)
@@ -548,21 +558,6 @@ class PetApp:
                 self.on_feed(it)
                 return
 
-    def _menu_work(self):
-        if not self.on_work:
-            return
-        from core import settings as _s
-        opts = _s.settings.get("work.options") or [30, 60, 120]
-        rate = _s.settings.get("work.rate_per_min", 2.0)
-        picks = [(str(m), f"打工 {m} 分钟（约赚 {int(m * rate)} 币）") for m in opts]
-        pick = self._choice_dialog("打工", "让宠物去上班赚专注币（时间到自动结算，中途取消无奖励）：", picks)
-        if pick:
-            self.on_work(int(pick))
-
-
-    def set_work(self, active, remaining=0):
-        """打工状态（main.py 轮询调用）：active + 剩余秒数。"""
-        self._queue.put(("work", (bool(active), float(remaining))))
     # ---------- 更换形象对话框 ----------
     def _open_skin_dialog(self):
         from ui import window_manager
@@ -799,8 +794,6 @@ class PetApp:
                         text, seconds = args
                         self.bubble_text = text
                         self._bubble_until = time.time() + seconds
-                elif kind == "work":
-                    self.work_active, self.work_remaining = args
                 elif kind == "mood":
                     self.mood = args[0]
                 elif kind == "state":
@@ -963,7 +956,7 @@ class PetApp:
             s_eff = view_scale * (1.0 + min(0.4, (self.level - 1) * 0.08))
             pet_renderer.draw_procedural_pet(
                 c, pet_cx + lean, cy + bob, shake, self.mood, self.level,
-                accessory=self.accessory, t=self._t, show_level=not self.mini,
+                t=self._t, show_level=not self.mini,
                 look=(self._look_dx, self._look_dy) if self._looking else None,
                 view_scale=view_scale, napping=napping)
             head = (pet_cx + lean, cy + bob - 14 * s_eff, 26 * s_eff)
@@ -977,17 +970,9 @@ class PetApp:
             pet_renderer.draw_error_effects(c, pet_cx, cy + bob, self._t, r=40.0 * view_scale)
         elif state == "sleep":
             pet_renderer.draw_sleep_effects(c, pet_cx, cy + bob, self._t, r=40.0 * view_scale)
+        self._pet_meta = meta   # 记录小猫头部/身体区域，供点击区域->动作
         if not self.mini:
             self._draw_bubble(c, w, h, meta, view_scale)
-        # 打工状态徽章（头顶 💼 + 剩余时间）
-        if self.work_active and not self.mini and meta:
-            _mins, _secs = divmod(max(0, int(self.work_remaining)), 60)
-            _label = f"💼 {_mins}:{_secs:02d}"
-            _fsb = max(9, min(14, int(8 * view_scale / 1.6)))
-            _ty = max(12, meta["box"][1] - 22)
-            c.create_text(cx, _ty, text=_label, fill="#4a3728",
-                          font=("Microsoft YaHei UI", _fsb, "bold"))
-
     def _draw_image(self, c, cx, cy, shake, state):
         w = c.winfo_width() or self.normal_size[0]
         h = c.winfo_height() or self.normal_size[1]
@@ -1010,8 +995,6 @@ class PetApp:
             hr = max(8, meta["r"] * dw)
         else:
             hx, hy, hr = cx + shake, cy - dh * 0.35, max(8, dw * 0.18)
-        if self.accessory:
-            pet_renderer.draw_accessory(c, hx, hy, hr, self.accessory)
         if self.mood >= 1:
             pet_renderer.draw_expression_overlay(c, hx, hy, hr, self.mood)
         # 图像在窗口中的整体范围（气泡避让用）
@@ -1019,7 +1002,7 @@ class PetApp:
         return {"head": (hx, hy, hr), "box": box}
 
     def _draw_bubble(self, c, w, h, meta=None, view_scale=1.0):
-        """说话气泡：完全在图像右边缘之外、脑袋右侧、均衡换行不截断无孤字。"""
+        """说话气泡：紧贴脑袋右侧、不遮挡图像、字号最大 12pt、按宽度自然换行不缩字。"""
         if not self.bubble_text or time.time() > self._bubble_until:
             return
         text = self.bubble_text
@@ -1029,26 +1012,18 @@ class PetApp:
         else:
             hx, hy, hr = w / 2.0, h / 2.0, w * 0.15
             ix1 = float(w)
-        gap = 6
-        right_w = max(50, int(w - ix1 - gap - 4))
+        gap = 10
         pad_x, pad_y = 12, 8
-        # 字号：保证每行至少 4 个中文字
+        # 字号：正常固定 12pt（用户硬上限），迷你模式随图像变小，绝不再往下缩
+        fs = 9 if self.mini else 12
         try:
             from tkinter import font as tkfont
-            f = tkfont.Font(family="Microsoft YaHei UI", size=12)
-            fs = 12
-            cw = f.measure("中")
-            while fs > 8 and (right_w - 2 * pad_x - cw) < cw * 4:
-                fs -= 1
-                f = tkfont.Font(family="Microsoft YaHei UI", size=fs)
-                cw = f.measure("中")
+            f = tkfont.Font(family="Microsoft YaHei UI", size=fs)
         except Exception:
             f = None
-            fs = 9
-            cw = 12
-        # 预留一个中文字宽，避免气泡右缘超出窗口
-        max_text_w = max(32, int(right_w - 2 * pad_x - cw))
-        # 均衡换行（每行像素均分，末尾无孤字）
+        right_w = max(60, int(w - ix1 - gap))
+        # 每行至少 4 个中文字宽，避免"两字换行"
+        max_text_w = max(64, int(right_w - 2 * pad_x))
         if f is not None:
             measure = f.measure
         else:
@@ -1057,7 +1032,6 @@ class PetApp:
         if total <= max_text_w:
             lines = [text]
         else:
-            # 迭代均衡换行：每行都不超过 max_text_w，且行数尽量少、无孤字
             n = max(2, int(math.ceil(total / max_text_w)))
             while True:
                 target = total / n
@@ -1079,15 +1053,14 @@ class PetApp:
                     break
                 n += 1
         display_text = "\n".join(lines)
-        # 临时测实际尺寸
         tmp = c.create_text(0, 0, text=display_text, anchor="nw",
                             font=("Microsoft YaHei UI", fs))
         tx0, ty0, tx1, ty1 = c.bbox(tmp)
         c.delete(tmp)
         bw = int(tx1 - tx0 + 2 * pad_x)
         bh = int(ty1 - ty0 + 2 * pad_y)
-        # 位置：图像右边缘之外，垂直居中于脑袋
-        bx = int(ix1 + gap)
+        # 位置：紧贴图像右边缘、垂直居中于脑袋；若右侧放不下则向左让位，保证气泡完整在窗口内
+        bx = int(min(max(4, ix1 + gap), max(4, w - bw - 4)))
         by = int(max(4, min(h - bh - 4, hy - bh / 2.0)))
         # 圆角白底气泡
         r = 10

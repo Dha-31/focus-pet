@@ -22,7 +22,6 @@ DEFAULTS = {
     },
     "supervision": {
         "poll_interval_seconds": 1,
-        "camera_enabled": False,
     },
     "lock": {
         "enabled": False,
@@ -50,11 +49,6 @@ DEFAULTS = {
     "extension": {
         "enabled": False,
         "port": 18765,
-    },
-    "camera": {
-        "enabled": False,
-        "device_index": 0,
-        "interval_seconds": 1,
     },
     "screen_analysis": {
         "enabled": True,

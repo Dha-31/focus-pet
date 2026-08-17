@@ -44,7 +44,10 @@ class SettingsEditor:
                   "所有参数集中一处：改一个值全项目生效（保存即热更新，无需重启）").pack(padx=14, pady=(12, 0), anchor="w")
         nb = ttk.Notebook(self.root)
         nb.pack(fill="both", expand=True, padx=8, pady=6)
-        self._build_tab(nb, "开发者参数", SETTINGS_SCHEMA)
+        # 开发者参数（汇率/阈值/经验表等）仅开发模式显示；用户版客户端自动隐藏
+        from core.dev import is_dev_mode
+        if is_dev_mode():
+            self._build_tab(nb, "开发者参数", SETTINGS_SCHEMA)
         self._build_tab(nb, "应用配置", CONFIG_SCHEMA)
 
         bar = tk.Frame(self.root)

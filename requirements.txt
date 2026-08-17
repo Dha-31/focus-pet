@@ -1,6 +1,4 @@
-# 基础功能只用 Python 标准库。摄像头（v2）需要以下包：
-#   pip install opencv-python mediapipe
-# 首次使用摄像头前运行: python tools/fetch_models.py （下载模型到 models/）
+# 基础功能只用 Python 标准库。
 #
 # 其他可选增强：
 # pillow            # 图片皮肤缩放 / 白色背景去除（tools/make_skin.py）

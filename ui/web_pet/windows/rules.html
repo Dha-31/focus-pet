@@ -1,0 +1,67 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>黑白名单</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;background:#f6efe6;color:#333}
+header{background:#fff;padding:14px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:18px}
+#save{background:#5cb85c;color:#fff;border:0;border-radius:8px;padding:8px 22px;font-size:14px;cursor:pointer}
+#content{padding:14px 20px} section{background:#fff;border-radius:12px;padding:12px 18px;margin-bottom:14px}
+section h2{margin:0 0 10px;font-size:14px;color:#e07a2f;border-bottom:1px solid #f2e8da;padding-bottom:6px}
+.cols{display:flex;gap:16px;flex-wrap:wrap} .col{flex:1;min-width:280px}
+.col h3{margin:6px 0;font-size:12px;color:#888}
+.pill{display:inline-flex;align-items:center;gap:6px;background:#f7f2ea;border-radius:14px;padding:3px 8px;margin:3px;font-size:12px}
+.pill button{border:0;background:none;color:#c0392b;cursor:pointer;font-size:13px}
+.add{display:flex;gap:6px;margin-top:8px} .add input{flex:1;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px}
+.add button{border:0;background:#eee;border-radius:6px;padding:5px 12px;cursor:pointer}
+#msg{font-size:13px;color:#2e8b57}
+</style></head>
+<body>
+<header><h1>黑白名单</h1><button id="save">💾 保存</button></header>
+<div id="content"><div id="msg"></div></div>
+<script>
+"use strict";
+const PORT=(window.api&&window.api.pyPort)||""; const BASE="http://127.0.0.1:"+PORT;
+let state={whitelist:{urls:[],processes:[],titles:[]},blacklist:{urls:[],processes:[],titles:[]}};
+const KEYS=["urls","processes","titles"];
+const LABELS={urls:"网址/链接",processes:"进程",titles:"窗口标题"};
+
+async function load(){
+  try{ state=await fetch(BASE+"/api/rules").then(r=>r.json()); render(); }
+  catch(e){ document.getElementById("content").innerHTML="<p style='color:#c00'>无法连接桌宠</p>"; }
+}
+function render(){
+  const c=document.getElementById("content"); c.innerHTML="";
+  ["blacklist","whitelist"].forEach(kind=>{
+    const sec=document.createElement("section");
+    sec.innerHTML=`<h2>${kind==="blacklist"?"🚫 黑名单（命中会拦截）":"✅ 白名单（放行）"}</h2>`;
+    const cols=document.createElement("div"); cols.className="cols";
+    KEYS.forEach(k=>{
+      const col=document.createElement("div"); col.className="col";
+      col.innerHTML=`<h3>${LABELS[k]}</h3><div class="pills"></div><div class="add"><input placeholder="添加..."><button>+</button></div>`;
+      const pills=col.querySelector(".pills");
+      (state[kind][k]||[]).forEach(v=>{
+        const p=document.createElement("span"); p.className="pill";
+        p.innerHTML=`${v}<button title="删除">✕</button>`;
+        p.querySelector("button").onclick=()=>{ state[kind][k]=state[kind][k].filter(x=>x!==v); render(); };
+        pills.appendChild(p);
+      });
+      const add=col.querySelector(".add");
+      add.querySelector("button").onclick=()=>{
+        const v=add.querySelector("input").value.trim(); if(!v)return;
+        state[kind][k]=state[kind][k]||[]; if(!state[kind][k].includes(v)) state[kind][k].push(v);
+        render();
+      };
+      add.querySelector("input").onkeydown=e=>{ if(e.key==="Enter") add.querySelector("button").click(); };
+      cols.appendChild(col);
+    });
+    sec.appendChild(cols); c.appendChild(sec);
+  });
+}
+document.getElementById("save").onclick=async()=>{
+  try{ const r=await fetch(BASE+"/api/rules",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(state)});
+    document.getElementById("msg").textContent=r.ok?"✅ 已保存，立即生效":"保存失败"; }
+  catch(e){ document.getElementById("msg").textContent="保存失败"; }
+};
+load();
+</script></body></html>

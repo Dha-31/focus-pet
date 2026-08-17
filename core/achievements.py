@@ -66,8 +66,8 @@ class AchievementManager:
             "streak_120": pet_state.best_streak >= 7200,
             "level_4": pet_state.level >= 4,
             "level_8": pet_state.level >= 8,
-            "buy_first": (len(inventory.owned_accessories) + len(inventory.owned_furniture)) >= 1,
-            "furnish_3": len(inventory.placed_furniture) >= 3,
+            "buy_first": len(inventory.owned_furniture) >= 1,
+            "furnish_3": sum(len(v) for v in inventory.placed_furniture.values()) >= 3,
             "escape_free": pet_state.escapes == 0,
         }
         newly = []

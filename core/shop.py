@@ -1,35 +1,64 @@
-"""core/shop.py：商店商品目录（装饰品 + 家具）。
+"""core/shop.py：商店商品目录（家具）。
 
-装饰品：戴在宠物身上（帽子/蝴蝶结/眼镜/围巾/小花/皇冠）
-家具：摆进个人空间（桌子/台灯/地毯/书架/绿植/窗户/沙发）
+家具按地图（场景）分类：温馨小屋 / 星空书房 / 海边 / 森林。
+在哪个地图分类买的家具，只能在那个地图用（饰品功能已移除）。
 """
-ACCESSORIES = [
-    {"id": "flower",     "name": "小花",       "price": 15, "kind": "flower"},
-    {"id": "bow_pink",   "name": "粉色蝴蝶结",  "price": 20, "kind": "bow"},
-    {"id": "scarf",      "name": "暖暖围巾",    "price": 25, "kind": "scarf"},
-    {"id": "hat_red",    "name": "小红帽",      "price": 30, "kind": "hat"},
-    {"id": "glasses",    "name": "酷酷眼镜",    "price": 40, "kind": "glasses"},
-    {"id": "crown_gold", "name": "金皇冠",      "price": 80, "kind": "crown"},
-]
-
 FURNITURE = [
-    {"id": "rug",       "name": "软软地毯",  "price": 20, "kind": "rug"},
-    {"id": "lamp",      "name": "小台灯",    "price": 25, "kind": "lamp"},
-    {"id": "plant",     "name": "绿植",      "price": 30, "kind": "plant"},
-    {"id": "window",    "name": "大窗户",    "price": 35, "kind": "window"},
-    {"id": "table",     "name": "学习桌",    "price": 40, "kind": "table"},
-    {"id": "bookshelf", "name": "书架",      "price": 60, "kind": "bookshelf"},
-    {"id": "sofa",      "name": "小沙发",    "price": 80, "kind": "sofa"},
+    # 温馨小屋
+    {"id": "rug",       "name": "软软地毯", "price": 0, "kind": "rug",       "scene": "cozy"},
+    {"id": "lamp",      "name": "小台灯",   "price": 0, "kind": "lamp",      "scene": "cozy"},
+    {"id": "plant",     "name": "绿植",     "price": 0, "kind": "plant",     "scene": "cozy"},
+    {"id": "window",    "name": "大窗户",   "price": 0, "kind": "window",    "scene": "cozy"},
+    {"id": "table",     "name": "学习桌",   "price": 0, "kind": "table",     "scene": "cozy"},
+    {"id": "bookshelf", "name": "书架",     "price": 0, "kind": "bookshelf", "scene": "cozy"},
+    {"id": "sofa",      "name": "小沙发",   "price": 0, "kind": "sofa",      "scene": "cozy"},
+    {"id": "fridge",    "name": "小冰箱",   "price": 0, "kind": "fridge",    "scene": "cozy"},
+    {"id": "tv",        "name": "电视机",   "price": 0, "kind": "tv",        "scene": "cozy"},
+    {"id": "clock",     "name": "挂钟",     "price": 0, "kind": "clock",     "scene": "cozy"},
+    {"id": "armchair",  "name": "单人沙发", "price": 0, "kind": "armchair",  "scene": "cozy"},
+    # 星空书房
+    {"id": "star_rug",  "name": "星空地毯", "price": 0, "kind": "star_rug",  "scene": "star"},
+    {"id": "moon_lamp", "name": "月亮灯",   "price": 0, "kind": "moon_lamp", "scene": "star"},
+    {"id": "planet",    "name": "星球摆件", "price": 0, "kind": "planet",    "scene": "star"},
+    {"id": "telescope", "name": "望远镜",   "price": 0, "kind": "telescope", "scene": "star"},
+    {"id": "star_desk", "name": "星云书桌", "price": 0, "kind": "star_desk", "scene": "star"},
+    {"id": "star_chair","name": "星光椅子", "price": 0, "kind": "star_chair","scene": "star"},
+    {"id": "star_books","name": "书堆",     "price": 0, "kind": "star_books","scene": "star"},
+    {"id": "aurora",    "name": "极光挂画", "price": 0, "kind": "aurora",    "scene": "star"},
+    # 星空田野露营
+    {"id": "tent",      "name": "露营帐篷", "price": 0, "kind": "tent",      "scene": "star"},
+    {"id": "campfire",  "name": "篝火",     "price": 0, "kind": "campfire",  "scene": "star"},
+    {"id": "picnic",    "name": "野餐垫",   "price": 0, "kind": "picnic",    "scene": "star"},
+    {"id": "camp_lamp", "name": "露营灯",   "price": 0, "kind": "camp_lamp", "scene": "star"},
+    {"id": "camp_chair","name": "露营椅",   "price": 0, "kind": "camp_chair","scene": "star"},
+    {"id": "cooler",    "name": "保温箱",   "price": 0, "kind": "cooler",    "scene": "star"},
+    # 海边
+    {"id": "beach_umbrella", "name": "遮阳伞", "price": 0, "kind": "beach_umbrella", "scene": "sea"},
+    {"id": "beach_chair",    "name": "沙滩椅", "price": 0, "kind": "beach_chair",    "scene": "sea"},
+    {"id": "sandcastle",     "name": "沙堡",   "price": 0, "kind": "sandcastle",     "scene": "sea"},
+    {"id": "shell",          "name": "贝壳",   "price": 0, "kind": "shell",          "scene": "sea"},
+    {"id": "fish_tank",      "name": "鱼缸",   "price": 0, "kind": "fish_tank",      "scene": "sea"},
+    {"id": "hammock",        "name": "吊床",   "price": 0, "kind": "hammock",        "scene": "sea"},
+    {"id": "sea_rug",        "name": "沙毯",   "price": 0, "kind": "sea_rug",        "scene": "sea"},
+    {"id": "crab",           "name": "小螃蟹", "price": 0, "kind": "crab",           "scene": "sea"},
+    # 森林
+    {"id": "tree",       "name": "小树",     "price": 0, "kind": "tree",       "scene": "forest"},
+    {"id": "mushroom",   "name": "蘑菇",     "price": 0, "kind": "mushroom",   "scene": "forest"},
+    {"id": "log",        "name": "木桩",     "price": 0, "kind": "log",        "scene": "forest"},
+    {"id": "birdhouse",  "name": "鸟屋",     "price": 0, "kind": "birdhouse",  "scene": "forest"},
+    {"id": "swing",      "name": "秋千",     "price": 0, "kind": "swing",      "scene": "forest"},
+    {"id": "stump_table","name": "树桩桌",   "price": 0, "kind": "stump_table","scene": "forest"},
+    {"id": "beehive",    "name": "蜂箱",     "price": 0, "kind": "beehive",    "scene": "forest"},
+    {"id": "forest_lamp","name": "萤火灯",   "price": 0, "kind": "forest_lamp","scene": "forest"},
 ]
 
-MAX_FURNITURE_SLOTS = 6
-
-
-def get_accessory(item_id):
-    for item in ACCESSORIES:
-        if item["id"] == item_id:
-            return item
-    return None
+# 家具按地图（场景）分类
+FURNITURE_SCENES = [
+    ("cozy", "温馨小屋"),
+    ("star", "星空书房"),
+    ("sea", "海边"),
+    ("forest", "森林"),
+]
 
 
 def get_furniture(item_id):

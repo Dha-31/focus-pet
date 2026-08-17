@@ -1,0 +1,173 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>设置</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; background: #f6efe6; color: #333; }
+  header { background: #fff; padding: 14px 20px; border-bottom: 1px solid #eee; position: sticky; top: 0; z-index: 5; }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 4px 0 0; color: #999; font-size: 12px; }
+  #content { padding: 14px 20px 90px; }
+  section { background: #fff; border-radius: 12px; padding: 12px 18px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+  section h2 { margin: 0 0 10px; font-size: 14px; color: #e07a2f; border-bottom: 1px solid #f2e8da; padding-bottom: 6px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+  .row label { flex: 0 0 180px; font-size: 13px; }
+  .row .desc { flex: 1; font-size: 11px; color: #999; }
+  .row input[type="text"], .row input[type="number"] { width: 220px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+  .row textarea { width: 100%; min-height: 70px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; }
+  #savebar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 12px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; align-items: center; }
+  button { padding: 8px 22px; border: 0; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  #save { background: #5cb85c; color: #fff; }
+  #close { background: #eee; color: #555; }
+  #msg { font-size: 13px; color: #2e8b57; }
+</style>
+</head>
+<body>
+<header><h1>设置</h1><p>修改后点「保存」立即生效（无需重启）</p></header>
+<div id="content"></div>
+<div id="savebar">
+  <button id="save">💾 保存</button>
+  <button id="close">关闭</button>
+  <span id="msg"></span>
+</div>
+<script>
+"use strict";
+const PORT = (window.api && window.api.pyPort) || "";
+const BASE = "http://127.0.0.1:" + PORT;
+
+const state = { schema: null, config: null, settings: null, controls: [] };
+
+function getPath(obj, path) {
+  return path.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
+}
+function setPath(obj, path, val) {
+  const parts = path.split(".");
+  let node = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (typeof node[parts[i]] !== "object" || node[parts[i]] === null) node[parts[i]] = {};
+    node = node[parts[i]];
+  }
+  node[parts[parts.length - 1]] = val;
+}
+
+function makeControl(e) {
+  const wrap = document.createElement("div");
+  wrap.style.flex = "1";
+  let input;
+  if (e.type === "bool") {
+    input = document.createElement("input");
+    input.type = "checkbox";
+    input.style.width = "auto";
+  } else if (e.type === "int" || e.type === "float") {
+    input = document.createElement("input");
+    input.type = "number";
+    if (e.min !== undefined) input.min = e.min;
+    if (e.max !== undefined) input.max = e.max;
+    if (e.step !== undefined) input.step = e.step;
+  } else if (e.type === "textlist") {
+    input = document.createElement("textarea");
+    input.rows = 4;
+  } else {
+    input = document.createElement("input");
+    input.type = "text";
+  }
+  input.dataset.path = e.path;
+  input.dataset.file = e.file;
+  input.dataset.type = e.type;
+  const file = e.file === "config" ? state.config : state.settings;
+  const cur = getPath(file, e.path);
+  if (e.type === "bool") input.checked = !!cur;
+  else if (e.type === "list" || e.type === "textlist") input.value = Array.isArray(cur) ? cur.join(", ") : (cur != null ? String(cur) : "");
+  else input.value = cur != null ? String(cur) : "";
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function render() {
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+  state.controls = [];
+  const groups = {};
+  [...state.schema.config_schema, ...state.schema.settings_schema].forEach((e) => {
+    (groups[e.category] = groups[e.category] || []).push(e);
+  });
+  for (const cat of Object.keys(groups)) {
+    const sec = document.createElement("section");
+    sec.innerHTML = "<h2>" + cat + "</h2>";
+    groups[cat].forEach((e) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      const label = document.createElement("label");
+      label.textContent = e.label;
+      const ctrl = makeControl(e);
+      row.appendChild(label);
+      row.appendChild(ctrl);
+      if (e.desc) {
+        const d = document.createElement("div");
+        d.className = "desc";
+        d.textContent = e.desc;
+        row.appendChild(d);
+      }
+      sec.appendChild(row);
+      state.controls.push(ctrl.querySelector("input,textarea"));
+    });
+    content.appendChild(sec);
+  }
+}
+
+function collect() {
+  const cfg = JSON.parse(JSON.stringify(state.config));
+  const st = JSON.parse(JSON.stringify(state.settings));
+  state.controls.forEach((el) => {
+    const e = state.schema.config_schema.concat(state.schema.settings_schema)
+      .find((x) => x.path === el.dataset.path && x.file === el.dataset.file);
+    if (!e) return;
+    let val;
+    if (e.type === "bool") val = el.checked;
+    else if (e.type === "int") val = parseInt(el.value, 10) || 0;
+    else if (e.type === "float") val = parseFloat(el.value) || 0;
+    else if (e.type === "list" || e.type === "textlist")
+      val = el.value.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean);
+    else val = el.value;
+    setPath(e.file === "config" ? cfg : st, e.path, val);
+  });
+  return { config: cfg, settings: st };
+}
+
+async function load() {
+  try {
+    const [s, d] = await Promise.all([
+      fetch(BASE + "/api/schema").then((r) => r.json()),
+      fetch(BASE + "/api/settings").then((r) => r.json()),
+    ]);
+    state.schema = s;
+    state.config = d.config;
+    state.settings = d.settings;
+    render();
+  } catch (err) {
+    document.getElementById("content").innerHTML = "<p style='padding:20px;color:#c00'>无法连接桌宠：请确认 Focus Pet 正在运行</p>";
+  }
+}
+
+document.getElementById("save").onclick = async () => {
+  try {
+    const body = collect();
+    const r = await fetch(BASE + "/api/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const msg = document.getElementById("msg");
+    msg.textContent = r.ok ? "✅ 已保存并生效" : "保存失败";
+    if (r.ok) load();
+  } catch (err) {
+    document.getElementById("msg").textContent = "保存失败";
+  }
+};
+document.getElementById("close").onclick = () => window.close();
+
+load();
+</script>
+</body>
+</html>

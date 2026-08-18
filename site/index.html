@@ -1,23 +1,23 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Focus Pet 🐾 陪你学习、也监督你学习的桌宠</title>
-<meta name="description" content="Focus Pet：陪你学习、也监督你学习的桌面养成宠物。黑名单拦截、屏幕分析、情绪温度计、奖章与空间养成。">
+<title>Focus Pet 🐾 A desktop pet that keeps you focused</title>
+<meta name="description" content="Focus Pet: a desktop companion pet that keeps you focused. Blacklist blocking, on-device screen analysis, an emotion thermometer, medals and a virtual space.">
 <style>
   :root { --bg:#fff8f0; --card:#ffffff; --ink:#3a2e28; --sub:#8a7a70; --accent:#ff9f43; --accent2:#ff6b6b; }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif; background:var(--bg); color:var(--ink); line-height:1.7; }
+  body { font-family:"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif; background:var(--bg); color:var(--ink); line-height:1.7; }
   a { color:var(--accent2); text-decoration:none; }
-  .wrap { max-width:960px; margin:0 auto; padding:0 20px; }
+  .wrap { max-width:1000px; margin:0 auto; padding:0 20px; }
   header { text-align:center; padding:64px 20px 40px; }
   header h1 { font-size:44px; letter-spacing:1px; }
   header p.tagline { font-size:18px; color:var(--sub); margin-top:10px; }
   .btn { display:inline-block; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; padding:14px 34px; border-radius:999px; font-size:18px; font-weight:bold; margin-top:22px; box-shadow:0 6px 18px rgba(255,107,107,.35); transition:transform .15s; }
   .btn:hover { transform:translateY(-2px); }
   .note { margin-top:10px; font-size:13px; color:var(--sub); }
-  .hero-img { margin:36px auto 0; max-width:480px; }
+  .hero-img { margin:36px auto 0; max-width:720px; }
   .hero-img img { width:100%; border-radius:18px; box-shadow:0 10px 30px rgba(0,0,0,.12); }
   section { padding:44px 0; }
   section h2 { font-size:26px; margin-bottom:18px; text-align:center; }
@@ -25,7 +25,7 @@
   .card { background:var(--card); border-radius:14px; padding:20px; box-shadow:0 4px 14px rgba(0,0,0,.06); }
   .card h3 { font-size:17px; margin-bottom:8px; }
   .card ul { padding-left:18px; color:var(--sub); font-size:14px; }
-  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
   .shots figure { background:var(--card); border-radius:14px; padding:10px; box-shadow:0 4px 14px rgba(0,0,0,.06); }
   .shots img { width:100%; border-radius:8px; }
   .shots figcaption { text-align:center; color:var(--sub); font-size:13px; padding-top:8px; }
@@ -39,51 +39,54 @@
 <header>
   <div class="wrap">
     <h1>Focus Pet 🐾</h1>
-    <p class="tagline">陪你学习、也监督你学习的桌面养成宠物</p>
-    <a class="btn" href="https://github.com/GITHUB_USERNAME/focus-pet/releases/latest">⬇ 下载 Windows 版</a>
-    <p class="note">v4.0.4 · 约 166MB · Windows 10/11 · 安装包自带卸载程序</p>
-    <div class="hero-img"><img src="screenshots/pet.png" alt="Focus Pet 桌宠"></div>
+    <p class="tagline">A desktop companion pet that keeps you focused</p>
+    <a class="btn" href="https://github.com/GITHUB_USERNAME/focus-pet/releases/latest">⬇ Download for Windows</a>
+    <p class="note">v4.0.4 · ~166 MB · Windows 10/11 · Installer with uninstaller</p>
+    <div class="hero-img"><img src="screenshots/pet.png" alt="Focus Pet desktop pet"></div>
   </div>
 </header>
 
 <section>
   <div class="wrap">
-    <h2>它不只是卖萌</h2>
+    <h2>It does more than act cute</h2>
     <div class="cards">
-      <div class="card"><h3>🚦 监督与拦截</h3><ul><li>黑白名单 + 「教宠物」误判纠正</li><li>本地截图画面分析兜底拦截</li><li>情绪温度计逐级变生气</li><li>提醒 → 遮挡 → 提示关闭</li></ul></div>
-      <div class="card"><h3>🐱 会动的 HTML 桌宠</h3><ul><li>呼吸 / 眨眼 / 打盹 / 踱步</li><li>脑袋右侧说话气泡</li><li>双击摸头、投喂、每日打卡</li><li>托盘 / 开机自启 / 迷你模式</li></ul></div>
-      <div class="card"><h3>🏠 养成与空间</h3><ul><li>专注币经济 + 每日/每周/每月奖章</li><li>成就徽章 + 学习报告</li><li>温馨小屋 / 星空田野 / 海边 / 森林</li><li>家具自由摆放 + 露营系列</li></ul></div>
+      <div class="card"><h3>🚦 Supervision &amp; blocking</h3><ul><li>Blacklist / whitelist + “teach the pet”</li><li>On-device screenshot analysis as fallback</li><li>Emotion thermometer escalates step by step</li><li>Remind → overlay → prompt to close</li></ul></div>
+      <div class="card"><h3>🐱 A living HTML pet</h3><ul><li>Breathing / blinking / dozing / pacing</li><li>Speech bubble beside the head</li><li>Double-click to pet, feeding, daily check-in</li><li>Tray / start on boot / mini mode</li></ul></div>
+      <div class="card"><h3>🏠 Raising &amp; space</h3><ul><li>Focus-coin economy + daily/weekly/monthly medals</li><li>Achievement badges + study report</li><li>Cozy Room / Star Field / Seaside / Forest</li><li>Placeable furniture + camping series</li></ul></div>
     </div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2>截图</h2>
+    <h2>Screenshots</h2>
     <div class="shots">
-      <figure><img src="screenshots/space.png" alt="我的空间 - 森林"><figcaption>我的空间 · 森林</figcaption></figure>
-      <figure><img src="screenshots/pet.png" alt="桌宠"><figcaption>桌面桌宠</figcaption></figure>
+      <figure><img src="screenshots/help.png" alt="Help center"><figcaption>Help center</figcaption></figure>
+      <figure><img src="screenshots/achievements.png" alt="Achievements"><figcaption>Achievements</figcaption></figure>
+      <figure><img src="screenshots/shop.png" alt="Shop"><figcaption>Shop</figcaption></figure>
+      <figure><img src="screenshots/settings.png" alt="Settings"><figcaption>Settings</figcaption></figure>
+      <figure><img src="screenshots/report.png" alt="Study report"><figcaption>Study report</figcaption></figure>
     </div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2>系统要求</h2>
+    <h2>System requirements</h2>
     <ul class="reqs">
-      <li>Windows 10 / 11（64 位）</li>
-      <li>安装包版无需 Python</li>
-      <li>浏览器拦截需 Chrome / Edge</li>
-      <li>屏幕分析为本地 OCR，不上传</li>
-      <li>建议开启系统透明效果（桌宠更通透）</li>
+      <li>Windows 10 / 11 (64-bit)</li>
+      <li>No Python needed for the installer</li>
+      <li>Chrome or Edge for browser blocking</li>
+      <li>Screen analysis runs locally, nothing is uploaded</li>
+      <li>Enabling Windows transparency looks best</li>
     </ul>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <p><a href="https://github.com/GITHUB_USERNAME/focus-pet">GitHub 项目主页</a> · <a href="https://github.com/GITHUB_USERNAME/focus-pet/blob/main/docs/设计文档.md">设计文档</a></p>
-    <p>Focus Pet · MIT License · 隐私承诺：截图/窗口信息本地处理，不上传</p>
+    <p><a href="https://github.com/GITHUB_USERNAME/focus-pet">GitHub Repository</a> · <a href="https://github.com/GITHUB_USERNAME/focus-pet/blob/main/docs/设计文档.md">Design doc</a></p>
+    <p>Focus Pet · MIT License · Privacy: screenshots / window info stay on your device</p>
   </div>
 </footer>
 </body>

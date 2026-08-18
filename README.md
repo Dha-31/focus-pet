@@ -38,7 +38,7 @@
 
 ## ⬇️ Download & Install
 
-- Grab **`FocusPet-Setup-4.0.4.exe`** (~166 MB, Windows installer) from the [Releases page](https://github.com/GITHUB_USERNAME/focus-pet/releases/latest)
+- Grab **`FocusPet-Setup-4.0.4.exe`** (~166 MB, Windows installer) from the [Releases page](https://github.com/Dha-31/focus-pet/releases/latest)
 - Run the installer: pick a directory → install → done; launch from the Start Menu or desktop shortcut
 - Uninstall via **Settings → Apps**, or the uninstaller in the Start Menu — **your study data is kept**
 - If SmartScreen shows “Unknown publisher” on first run, click **More info → Run anyway**

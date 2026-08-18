@@ -33,7 +33,6 @@ def main():
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'docs')}{os.pathsep}docs",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'browser_extension')}{os.pathsep}browser_extension",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'models')}{os.pathsep}models",
-        "--add-data", f"{os.path.join(PROJECT_ROOT, 'release')}{os.pathsep}release",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'desktop')}{os.pathsep}desktop",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'ui', 'web_pet')}{os.pathsep}ui/web_pet",
         "--add-data", f"{os.path.join(PROJECT_ROOT, 'tools', 'electron', 'runtime')}{os.pathsep}tools/electron/runtime",

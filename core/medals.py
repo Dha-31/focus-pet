@@ -14,7 +14,7 @@ import os
 
 from .config import DATA_DIR
 
-REWARD_COINS = 20
+REWARD_COINS = 30
 
 MEDALS = [
     # ---- 每日 ----

@@ -81,8 +81,8 @@ FEATURES = [
      "what": "学习时自动开 Windows 专注助手：微信/QQ 等不弹通知、任务栏不闪烁、不响铃，结束恢复",
      "added_in": "3.7"},
     {"id": "extension", "name": "浏览器扩展拦截",
-     "where": "Chrome/Edge 手动加载 browser_extension/，设置里开启桥接",
-     "what": "URL 级黑名单拦截 + 白名单特例 + 教宠物；打开黑名单网站跳转拦截页",
+     "where": "Edge/Chrome 商店搜索安装「Focus Pet」扩展（一键，无需开发者模式）→ 设置 → 应用配置 → 开启「浏览器扩展桥接」",
+     "what": "URL 级黑名单拦截 + 白名单特例 + 教宠物；打开黑名单网站跳转拦截页；数据仅发本机 127.0.0.1",
      "added_in": "1.5"},
     # ---- v4.0.1 互动玩法 ----
     {"id": "pet_headpat", "name": "摸头",

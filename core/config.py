@@ -47,7 +47,7 @@ DEFAULTS = {
         "enabled": True,               # 学习时自动屏蔽系统通知（专注助手，v3.7.1）
     },
     "extension": {
-        "enabled": False,
+        "enabled": True,
         "port": 18765,
     },
     "screen_analysis": {

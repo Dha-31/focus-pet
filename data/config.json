@@ -47,7 +47,7 @@
     "enabled": true
   },
   "extension": {
-    "enabled": false,
+    "enabled": true,
     "port": 18765
   },
   "screen_analysis": {

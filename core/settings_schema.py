@@ -10,7 +10,7 @@
 # 默认参数（会被 data/settings.json 覆盖）
 DEFAULTS = {
     "economy": {
-        "coin_per_minute": 1.0,      # 每专注 1 分钟获得的金币数（0.1 = 10 分钟 1 币）
+        "coin_per_minute": 1.5,      # 每专注 1 分钟获得的金币数（0.1 = 10 分钟 1 币）
         "achievement_reward": 20,    # 每解锁一个成就奖励的金币
         "escape_penalty": 20,        # 逃跑/连错密码扣除的金币
     },
@@ -27,15 +27,52 @@ DEFAULTS = {
     },
     "shop": {
         "prices": {
-            "flower": 15, "bow_pink": 20, "scarf": 25, "hat_red": 30,
-            "glasses": 40, "crown_gold": 80,
-            "rug": 20, "lamp": 25, "plant": 30, "window": 35,
-            "table": 40, "bookshelf": 60, "sofa": 80,
+            "rug": 400,
+            "lamp": 450,
+            "plant": 500,
+            "clock": 400,
+            "window": 900,
+            "table": 1100,
+            "bookshelf": 1200,
+            "sofa": 1400,
+            "armchair": 1300,
+            "fridge": 1500,
+            "tv": 1700,
+            "star_rug": 600,
+            "star_books": 500,
+            "star_chair": 600,
+            "moon_lamp": 700,
+            "planet": 800,
+            "star_desk": 1300,
+            "aurora": 1500,
+            "telescope": 1900,
+            "picnic": 600,
+            "camp_chair": 600,
+            "camp_lamp": 700,
+            "cooler": 900,
+            "campfire": 1000,
+            "tent": 1700,
+            "shell": 400,
+            "crab": 400,
+            "sea_rug": 500,
+            "sandcastle": 600,
+            "beach_chair": 700,
+            "beach_umbrella": 900,
+            "hammock": 1300,
+            "fish_tank": 1500,
+            "mushroom": 400,
+            "log": 500,
+            "tree": 600,
+            "birdhouse": 700,
+            "beehive": 800,
+            "stump_table": 900,
+            "forest_lamp": 1100,
+            "swing": 1300
         },
     },
     "checkin": {
-        "base_reward": 10,      # 每日打卡基础奖励金币
-        "streak_bonus": 2,      # 连续签到额外加成（连续第 N 天 +N*2 币）
+        "base_reward": 15,      # 每日打卡基础奖励金币
+        "streak_bonus": 3,      # 连续签到额外加成（连续第 N 天 +N*2 币）
     },
     "feed": {
         "items": [
@@ -103,14 +140,52 @@ SETTINGS_SCHEMA = [
     {"path": "pet.xp_levels_seconds", "file": "settings", "category": "养成",
      "label": "升级所需累计专注(秒)", "type": "list",
      "desc": "第 N 个值 = 升到 Lv.N+1 所需累计专注秒数，逗号分隔"},
-    # 商店价格
-    {"path": "shop.prices.rug", "file": "settings", "category": "商店", "label": "地毯价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.lamp", "file": "settings", "category": "商店", "label": "台灯价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.plant", "file": "settings", "category": "商店", "label": "绿植价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.window", "file": "settings", "category": "商店", "label": "窗户价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.table", "file": "settings", "category": "商店", "label": "学习桌价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.bookshelf", "file": "settings", "category": "商店", "label": "书架价格", "type": "int", "min": 0, "max": 1000},
-    {"path": "shop.prices.sofa", "file": "settings", "category": "商店", "label": "沙发价格", "type": "int", "min": 0, "max": 1000},
+    # 商店价格（按地图分组）
+    # -- 温馨小屋 --
+    {"path": "shop.prices.rug", "file": "settings", "category": "商店", "label": "软软地毯价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.lamp", "file": "settings", "category": "商店", "label": "小台灯价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.plant", "file": "settings", "category": "商店", "label": "绿植价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.clock", "file": "settings", "category": "商店", "label": "挂钟价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.window", "file": "settings", "category": "商店", "label": "大窗户价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.table", "file": "settings", "category": "商店", "label": "学习桌价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.bookshelf", "file": "settings", "category": "商店", "label": "书架价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.sofa", "file": "settings", "category": "商店", "label": "小沙发价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.armchair", "file": "settings", "category": "商店", "label": "单人沙发价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.fridge", "file": "settings", "category": "商店", "label": "小冰箱价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.tv", "file": "settings", "category": "商店", "label": "电视机价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    # -- 星空/露营 --
+    {"path": "shop.prices.star_rug", "file": "settings", "category": "商店", "label": "星空地毯价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.star_books", "file": "settings", "category": "商店", "label": "书堆价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.star_chair", "file": "settings", "category": "商店", "label": "星光椅子价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.moon_lamp", "file": "settings", "category": "商店", "label": "月亮灯价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.planet", "file": "settings", "category": "商店", "label": "星球摆件价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.star_desk", "file": "settings", "category": "商店", "label": "星云书桌价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.aurora", "file": "settings", "category": "商店", "label": "极光挂画价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.telescope", "file": "settings", "category": "商店", "label": "望远镜价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.picnic", "file": "settings", "category": "商店", "label": "野餐垫价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.camp_chair", "file": "settings", "category": "商店", "label": "露营椅价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.camp_lamp", "file": "settings", "category": "商店", "label": "露营灯价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.cooler", "file": "settings", "category": "商店", "label": "保温箱价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.campfire", "file": "settings", "category": "商店", "label": "篝火价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.tent", "file": "settings", "category": "商店", "label": "露营帐篷价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    # -- 海边 --
+    {"path": "shop.prices.shell", "file": "settings", "category": "商店", "label": "贝壳价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.crab", "file": "settings", "category": "商店", "label": "小螃蟹价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.sea_rug", "file": "settings", "category": "商店", "label": "沙毯价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.sandcastle", "file": "settings", "category": "商店", "label": "沙堡价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.beach_chair", "file": "settings", "category": "商店", "label": "沙滩椅价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.beach_umbrella", "file": "settings", "category": "商店", "label": "遮阳伞价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.hammock", "file": "settings", "category": "商店", "label": "吊床价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.fish_tank", "file": "settings", "category": "商店", "label": "鱼缸价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    # -- 森林 --
+    {"path": "shop.prices.mushroom", "file": "settings", "category": "商店", "label": "蘑菇价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.log", "file": "settings", "category": "商店", "label": "木桩价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.tree", "file": "settings", "category": "商店", "label": "小树价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.birdhouse", "file": "settings", "category": "商店", "label": "鸟屋价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.beehive", "file": "settings", "category": "商店", "label": "蜂箱价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.stump_table", "file": "settings", "category": "商店", "label": "树桩桌价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.forest_lamp", "file": "settings", "category": "商店", "label": "萤火灯价格", "type": "int", "min": 0, "max": 5000, "step": 50},
+    {"path": "shop.prices.swing", "file": "settings", "category": "商店", "label": "秋千价格", "type": "int", "min": 0, "max": 5000, "step": 50},
     # 打卡
     {"path": "checkin.base_reward", "file": "settings", "category": "打卡",
      "label": "每日打卡基础奖励", "type": "int", "min": 0, "max": 1000, "step": 1,

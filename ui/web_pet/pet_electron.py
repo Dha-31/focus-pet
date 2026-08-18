@@ -154,7 +154,8 @@ class _Handler(BaseHTTPRequestHandler):
                 from core import shop as _shop
                 from core.economy import Inventory
                 inv = Inventory()
-                self._send(200, {"furniture": _shop.FURNITURE, "scenes": _shop.FURNITURE_SCENES,
+                items = [dict(it, price=_shop.price_of(it)) for it in _shop.FURNITURE]
+                self._send(200, {"furniture": items, "scenes": _shop.FURNITURE_SCENES,
                                  "inventory": {"coins": round(inv.coins, 1),
                                                "owned_furniture": inv.owned_furniture,
                                                "placed_furniture": inv.placed_furniture}})

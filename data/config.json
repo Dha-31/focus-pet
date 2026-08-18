@@ -21,8 +21,7 @@
     ]
   },
   "supervision": {
-    "poll_interval_seconds": 1,
-    "camera_enabled": false
+    "poll_interval_seconds": 1
   },
   "lock": {
     "enabled": false,
@@ -30,17 +29,26 @@
   },
   "pet": {
     "skin": "default",
-    "window_x": 0,
-    "window_y": 0
+    "mini_mode": false
+  },
+  "dnd": {
+    "enabled": false
+  },
+  "sound": {
+    "enabled": true
+  },
+  "hotkeys": {
+    "enabled": true
+  },
+  "first_run": {
+    "done": false
+  },
+  "focus_assist": {
+    "enabled": true
   },
   "extension": {
-    "enabled": true,
+    "enabled": false,
     "port": 18765
-  },
-  "camera": {
-    "enabled": true,
-    "device_index": 1,
-    "interval_seconds": 1.0
   },
   "screen_analysis": {
     "enabled": true,

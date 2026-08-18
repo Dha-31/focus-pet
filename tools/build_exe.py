@@ -1,8 +1,8 @@
 """tools/build_exe.py：打包 Windows 客户端（PyInstaller）。
 
 用法：
-  python tools/build_exe.py          # 体验版：排除重型 AI（摄像头/截图分析降级提示）
-  python tools/build_exe.py --full   # 完整版：包含摄像头/截图分析（体积大、易踩坑）
+  python tools/build_exe.py          # 精简版（默认）：保留 rapidocr 屏幕分析，排除 mediapipe/cv2/sklearn/scipy/rembg（上传图片人脸自适配降级）
+  python tools/build_exe.py --full   # 完整版：全部依赖都包含（体积大）
 
 产物：dist/FocusPet/FocusPet.exe（onedir，双击即用，无需 Python）
 """
@@ -40,9 +40,16 @@ def main():
     ]
     import importlib.util as _iu
     if not full:
-        # 体验版：排除重型 AI 依赖（它们打包易失败、体积巨大；代码已优雅降级）
-        for mod in ("mediapipe", "cv2", "rapidocr_onnxruntime", "sklearn", "scipy"):
+        # 精简版：排除重型/已删除功能依赖（摄像头 mediapipe/cv2、ML 训练 sklearn/scipy、AI 抠图 rembg）
+        # 保留 rapidocr_onnxruntime（屏幕分析 OCR）；joblib 自动识别打包
+        for mod in ("mediapipe", "cv2", "sklearn", "scipy", "rembg"):
             cmd += ["--exclude-module", mod]
+        try:
+            if _iu.find_spec("rapidocr_onnxruntime"):
+                cmd += ["--collect-all", "rapidocr_onnxruntime"]
+                print("[build] 已包含 rapidocr_onnxruntime（屏幕分析 OCR）")
+        except Exception:
+            pass
     else:
         # 完整版：mediapipe/rapidocr 没有官方 PyInstaller hook，需显式收集
         for mod in ("rapidocr_onnxruntime",):
@@ -55,18 +62,19 @@ def main():
     # 动态导入的工具模块（PyInstaller 可能漏）
     cmd += ["--hidden-import", "tools.make_skin", "--hidden-import", "tools.theme_scaffold",
             "--hidden-import", "tools.validate_theme", "--hidden-import", "ui.rules_window"]
-    # AI 抠图（rembg）：已安装则打包进客户端（体积大但效果好）
-    try:
-        import importlib.util
-        if importlib.util.find_spec("rembg"):
-            cmd += ["--collect-all", "rembg"]
-            print("[build] 已包含 rembg（AI 抠图，首次使用需联网下载模型）")
-    except Exception:
-        pass
+    # AI 抠图（rembg）：仅完整版包含（体积大但效果好）
+    if full:
+        try:
+            import importlib.util
+            if importlib.util.find_spec("rembg"):
+                cmd += ["--collect-all", "rembg"]
+                print("[build] 已包含 rembg（AI 抠图，首次使用需联网下载模型）")
+        except Exception:
+            pass
     cmd.append(os.path.join(PROJECT_ROOT, "main.py"))
 
     print("构建命令:", " ".join(cmd[:8]), "...")
-    print("模式:", "完整版" if full else "体验版（无摄像头/截图分析，降级提示）")
+    print("模式:", "完整版（全部依赖）" if full else "精简版（保留屏幕分析，排除重型依赖）")
     r = subprocess.run(cmd, cwd=PROJECT_ROOT)
     print("构建结束，退出码:", r.returncode)
     exe = os.path.join(PROJECT_ROOT, "dist", "FocusPet", "FocusPet.exe")

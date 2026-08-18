@@ -34,3 +34,6 @@ dist/
 
 tools/electron/
 
+
+release/*.exe
+

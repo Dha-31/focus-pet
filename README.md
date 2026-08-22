@@ -52,7 +52,7 @@ uv run python main.py --headless-check   # sanity-check core logic
 uv run python main.py                     # launch the pet
 ```
 
-Browser extension: start the app, then in Chrome/Edge choose **Load unpacked** and select the `browser_extension` folder.
+Browser extension: start the app, then in **Edge** install **Focus Pet** from the [Edge Add-ons store](https://microsoftedge.microsoft.com/addons/detail/ophhepkfplbinkhogiklfaaepimonppo) — or, for development, choose **Load unpacked** and select the `browser_extension` folder.
 
 ## 🖥 System Requirements
 

@@ -80,8 +80,11 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(500, {"error": str(exc)})
         elif path == "/api/schema":
             try:
+                from core.dev import is_dev_mode
                 from core.settings_schema import CONFIG_SCHEMA, SETTINGS_SCHEMA
-                self._send(200, {"config_schema": CONFIG_SCHEMA, "settings_schema": SETTINGS_SCHEMA})
+                # ?????? exe????????????????????/????/???/????/?????
+                settings_schema = SETTINGS_SCHEMA if is_dev_mode() else []
+                self._send(200, {"config_schema": CONFIG_SCHEMA, "settings_schema": settings_schema})
             except Exception as exc:
                 self._send(500, {"error": str(exc)})
         elif path == "/api/help":
@@ -196,12 +199,14 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, {"ok": True})
         elif path == "/api/settings":
             try:
+                from core.dev import is_dev_mode
                 from core.config import save_config
                 from core.settings import SETTINGS_PATH, settings as _sm
                 data = self._json_body()
                 if isinstance(data.get("config"), dict):
                     save_config(data["config"])
-                if isinstance(data.get("settings"), dict):
+                # ?????????????settings.json??????????
+                if is_dev_mode() and isinstance(data.get("settings"), dict):
                     with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
                         json.dump(data["settings"], f, ensure_ascii=False, indent=2)
                     _sm.reload()

@@ -1,4 +1,4 @@
-﻿## Focus Pet v4.0.4
+## Focus Pet v4.0.4
 
 A desktop companion pet that keeps you focused — and keeps an eye on you.
 
@@ -16,8 +16,12 @@ Download **FocusPet-Setup-4.0.4.exe** (~166 MB) and run it.
 - Per-user install (no admin); Start Menu + optional desktop shortcut; built-in uninstaller
 - Your study data is kept on uninstall (`%LOCALAPPDATA%\FocusPet`)
 
+### v4.0.4 revised build (2026-08-23)
+- Fix: the user-facing Settings no longer shows or allows editing developer-only parameters (shop prices, focus-coin rate, blocking tiers, XP table, keywords)
+- Checksum updated to the revised build below
+
 ### Checksum
-SHA256 (FocusPet-Setup-4.0.4.exe): `BCD70F4DF028CA60CBED4C795F84EF5D2A13EA5547EDA2A961829B1475B3FEDB`
+SHA256 (FocusPet-Setup-4.0.4.exe): `E0F4C12BB517EE265C90E2B45FCD2BC9C64DC3898858E7120CC473F8C86BC5A2`
 
 ### Notes
 - Light build: on-device OCR screen analysis is included; face auto-adaptation for custom pet images is degraded (mediapipe/cv2 not bundled)

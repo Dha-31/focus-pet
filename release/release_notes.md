@@ -18,10 +18,11 @@ Download **FocusPet-Setup-4.0.4.exe** (~166 MB) and run it.
 
 ### v4.0.4 revised build (2026-08-23)
 - Fix: the user-facing Settings no longer shows or allows editing developer-only parameters (shop prices, focus-coin rate, blocking tiers, XP table, keywords)
+- New app icon: real rendered cat (multi-size .ico, incl. tray icon)
 - Checksum updated to the revised build below
 
 ### Checksum
-SHA256 (FocusPet-Setup-4.0.4.exe): `E0F4C12BB517EE265C90E2B45FCD2BC9C64DC3898858E7120CC473F8C86BC5A2`
+SHA256 (FocusPet-Setup-4.0.4.exe): `150BB4B810E683234D56CD0F21EF09A762E5DFDF44B7AE4DEBBEFAC3B13639FB`
 
 ### Notes
 - Light build: on-device OCR screen analysis is included; face auto-adaptation for custom pet images is degraded (mediapipe/cv2 not bundled)

@@ -41,7 +41,7 @@
     "enabled": true
   },
   "first_run": {
-    "done": false
+    "done": true
   },
   "focus_assist": {
     "enabled": true
